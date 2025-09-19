@@ -19,6 +19,8 @@ class JuanAttack:
         self.attack_animation_frame = 0
         self.attack_animation_speed = 0.3
         self.attack_direction = "down"
+        self.attack_damage_pending = None  # Almacena el daño pendiente hasta el final de la animación
+        self.attack_enemies_target = []    # Lista de enemigos que serán afectados al final
         
         # URLs de los GIFs de ataque de Juan desde GitHub Issues (INVERTIDAS)
         self.attack_gif_urls = {
@@ -41,7 +43,7 @@ class JuanAttack:
                 print(f"📥 Descargando ataque {direction} desde GitHub...")
                 
                 # Descargar el GIF desde GitHub
-                response = requests.get(url)
+                response = requests.get(url, timeout=10)  # Timeout de 10 segundos
                 response.raise_for_status()
                 gif_data = BytesIO(response.content)
                 
@@ -107,19 +109,27 @@ class JuanAttack:
             
             # Verificar que la dirección existe en las animaciones
             if self.attack_direction in self.attack_animations:
-                # Si terminó la animación, resetear (igual que movimientos)
+                # Si terminó la animación, aplicar daño y resetear
                 if self.attack_animation_frame >= len(self.attack_animations[self.attack_direction]):
+                    # Aplicar daño al final de la animación
+                    if self.attack_damage_pending is not None:
+                        self.apply_pending_damage()
+                    
                     self.attack_animation_frame = 0
                     # Terminar ataque después de una animación completa
                     self.is_attacking = False
+                    self.attack_damage_pending = None
+                    self.attack_enemies_target = []
             else:
                 # Si no existe la dirección, terminar ataque
                 self.is_attacking = False
                 self.attack_animation_frame = 0
+                self.attack_damage_pending = None
+                self.attack_enemies_target = []
     
     def handle_attack_input(self, keys_pressed, enemies):
         """Maneja la entrada de ataque (tecla ESPACIO)"""
-        if keys_pressed[pygame.K_SPACE]:
+        if keys_pressed[pygame.K_SPACE] and not self.is_attacking:
             # Determinar dirección de ataque basada en las teclas actuales presionadas
             # Seguir exactamente la misma lógica que los movimientos
             direction = "down"  # Dirección por defecto
@@ -142,12 +152,12 @@ class JuanAttack:
             # Iniciar animación de ataque
             self.start_attack_animation(direction)
             
-            # Realizar ataque combo
-            return self.combo_attack(enemies)
+            # Preparar ataque combo (daño se aplicará al final de la animación)
+            return self.prepare_combo_attack(enemies)
         
         return False
         
-    def combo_attack(self, enemies):
+    def prepare_combo_attack(self, enemies):
         current_time = pygame.time.get_ticks()
         if current_time - self.last_attack_time < self.attack_cooldown:
             return False
@@ -158,16 +168,20 @@ class JuanAttack:
         base_damage = 15 + (self.combo_count * 5)
         range_multiplier = 1 + (self.combo_count * 0.5)
         
-        # Crear área de ataque direccional
+        # Crear área de ataque direccional (usando direcciones invertidas igual que los GIFs)
         attack_range = int(70 * range_multiplier)
         if self.attack_direction == "up":
-            attack_rect = pygame.Rect(self.character.x - 20, self.character.y - attack_range, 104, attack_range + 32)
-        elif self.attack_direction == "down":
+            # Cuando el GIF es "up" (que está invertido), el área debe ser abajo
             attack_rect = pygame.Rect(self.character.x - 20, self.character.y + 32, 104, attack_range)
+        elif self.attack_direction == "down":
+            # Cuando el GIF es "down" (que está invertido), el área debe ser arriba
+            attack_rect = pygame.Rect(self.character.x - 20, self.character.y - attack_range, 104, attack_range + 32)
         elif self.attack_direction == "left":
-            attack_rect = pygame.Rect(self.character.x - attack_range, self.character.y - 20, attack_range + 32, 104)
-        elif self.attack_direction == "right":
+            # Cuando el GIF es "left" (que está invertido), el área debe ser derecha
             attack_rect = pygame.Rect(self.character.x + 32, self.character.y - 20, attack_range, 104)
+        elif self.attack_direction == "right":
+            # Cuando el GIF es "right" (que está invertido), el área debe ser izquierda
+            attack_rect = pygame.Rect(self.character.x - attack_range, self.character.y - 20, attack_range + 32, 104)
         else:
             # Ataque circular por defecto
             attack_rect = pygame.Rect(
@@ -186,15 +200,33 @@ class JuanAttack:
         }
         self.combo_hits.append(combo_effect)
         
-        hit_enemy = False
+        # Preparar daño para aplicar al final de la animación
+        self.attack_damage_pending = base_damage
+        self.attack_enemies_target = []
+        
         for enemy in enemies:
             enemy_rect = pygame.Rect(enemy.x, enemy.y, 64, 64)
             if attack_rect.colliderect(enemy_rect):
-                enemy.take_damage(base_damage)
-                hit_enemy = True
-                print(f"👊 Juan combo x{self.combo_count + 1} hacia {self.attack_direction} ({base_damage} daño)")
+                self.attack_enemies_target.append(enemy)
         
-        return hit_enemy
+        print(f"🎯 Juan preparando combo x{self.combo_count + 1} hacia {self.attack_direction} ({base_damage} daño pendiente)")
+        return len(self.attack_enemies_target) > 0
+    
+    def apply_pending_damage(self):
+        """Aplica el daño pendiente al final de la animación de ataque"""
+        if self.attack_damage_pending is None:
+            return
+        
+        for enemy in self.attack_enemies_target:
+            if hasattr(enemy, 'alive') and enemy.alive:
+                enemy.take_damage(self.attack_damage_pending)
+                print(f"👊 Juan combo x{self.combo_count + 1} impactó hacia {self.attack_direction} ({self.attack_damage_pending} daño)")
+        
+        print(f"💥 Juan finalizó ataque combo - {len(self.attack_enemies_target)} enemigos impactados")
+    
+    def is_character_attacking(self):
+        """Retorna True si el personaje está atacando (para bloquear movimiento)"""
+        return self.is_attacking
     
     def special_attack(self, enemies):
         current_time = pygame.time.get_ticks()

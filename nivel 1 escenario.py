@@ -25,7 +25,7 @@ class Background:
         """Carga la imagen de fondo desde GitHub"""
         try:
             print("📥 Descargando escenario nivel 1...")
-            response = requests.get(url)
+            response = requests.get(url, timeout=15)  # Timeout de 15 segundos
             response.raise_for_status()
             
             image_data = BytesIO(response.content)
@@ -118,9 +118,12 @@ class Game:
                 if event.key == pygame.K_ESCAPE:
                     return False
                 elif event.key == pygame.K_TAB and self.switch_cooldown <= 0:
-                    # Alternar entre personajes
-                    self.switch_character()
-                    self.switch_cooldown = 10
+                    # Alternar entre personajes solo si ninguno está atacando
+                    if not self.juan_attack.is_character_attacking() and not self.adan_attack.is_character_attacking():
+                        self.switch_character()
+                        self.switch_cooldown = 10
+                    else:
+                        print("⚠️ No se puede cambiar de personaje durante un ataque")
                 elif event.key == pygame.K_SPACE:
                     # Ataque básico del personaje actual
                     self.perform_basic_attack()
@@ -147,22 +150,11 @@ class Game:
         """Realiza ataque básico del personaje actual"""
         if self.game_over or self.victory:
             return
-            
-        worms = self.worm_spawner.get_worms()
         
-        if self.current_character == self.juan:
-            hit = self.juan_attack.handle_attack_input(pygame.key.get_pressed(), worms)
-            if hit:
-                # Verificar si algún gusano murió
-                for worm in worms:
-                    if not worm.alive:
-                        self.enemies_defeated += 1
-        else:  # Adán
-            hit = self.adan_attack.handle_attack_input(pygame.key.get_pressed(), worms)
-            if hit:
-                for worm in worms:
-                    if not worm.alive:
-                        self.enemies_defeated += 1
+        # El ataque ahora se maneja automáticamente en update() 
+        # cuando se presiona ESPACIO, así que este método puede ser simplificado
+        # o usado para efectos adicionales si es necesario
+        print(f"🎯 {self.current_character.name} iniciando ataque básico")
     
     def perform_special_attack(self):
         """Realiza ataque especial del personaje actual"""
@@ -191,10 +183,20 @@ class Game:
             
         keys_pressed = pygame.key.get_pressed()
         
-        # Actualizar personajes
-        self.current_character.update(keys_pressed)
+        # Actualizar personajes solo si no están atacando
+        if not self.juan_attack.is_character_attacking():
+            juan_keys = keys_pressed if self.current_character == self.juan else pygame.key.get_pressed()
+            # Solo pasar teclas válidas si es el personaje activo
+            if self.current_character == self.juan:
+                self.juan.update(juan_keys)
+            
+        if not self.adan_attack.is_character_attacking():
+            adan_keys = keys_pressed if self.current_character == self.adan else pygame.key.get_pressed()
+            # Solo pasar teclas válidas si es el personaje activo
+            if self.current_character == self.adan:
+                self.adan.update(adan_keys)
         
-        # Manejar ataques con tecla O (continuo)
+        # Manejar ataques con tecla ESPACIO (continuo)
         worms = self.worm_spawner.get_worms()
         if self.current_character == self.juan:
             self.juan_attack.handle_attack_input(keys_pressed, worms)
@@ -205,6 +207,11 @@ class Game:
         if self.juan.health <= 0 and self.adan.health <= 0:
             self.game_over = True
             print("💀 GAME OVER - Ambos personajes han muerto")
+        
+        # Contar enemigos derrotados después de que los ataques se procesen
+        current_worm_count = len(self.worm_spawner.get_worms())
+        total_worms_created = len(self.worm_spawner.worms)  # Incluye vivos y muertos
+        self.enemies_defeated = total_worms_created - current_worm_count
         
         # Verificar condición de victoria
         if self.enemies_defeated >= self.victory_condition:
@@ -270,18 +277,22 @@ class Game:
         # Dibujar fondo con scroll
         self.background.draw(self.screen, self.camera_x, self.camera_y, self.screen_width, self.screen_height)
         
-        # Dibujar personaje inactivo (más transparente)
-        other_surface = pygame.Surface((64, 64))
-        other_surface.set_alpha(128)
-        if self.other_character.current_direction in self.other_character.animations:
-            frames = self.other_character.animations[self.other_character.current_direction]
-            if frames:
-                frame = frames[0]
-                other_surface.blit(frame, (0, 0))
-                self.screen.blit(other_surface, (self.other_character.x - self.camera_x, self.other_character.y - self.camera_y))
+        # Dibujar personaje inactivo (más transparente) solo si no está atacando
+        if not (self.other_character == self.juan and self.juan_attack.is_character_attacking()) and \
+           not (self.other_character == self.adan and self.adan_attack.is_character_attacking()):
+            other_surface = pygame.Surface((64, 64))
+            other_surface.set_alpha(128)
+            if self.other_character.current_direction in self.other_character.animations:
+                frames = self.other_character.animations[self.other_character.current_direction]
+                if frames:
+                    frame = frames[0]
+                    other_surface.blit(frame, (0, 0))
+                    self.screen.blit(other_surface, (self.other_character.x - self.camera_x, self.other_character.y - self.camera_y))
         
-        # Dibujar personaje activo
-        self.current_character.draw(self.screen, self.camera_x, self.camera_y)
+        # Dibujar personaje activo solo si no está atacando
+        if not (self.current_character == self.juan and self.juan_attack.is_character_attacking()) and \
+           not (self.current_character == self.adan and self.adan_attack.is_character_attacking()):
+            self.current_character.draw(self.screen, self.camera_x, self.camera_y)
         
         # Dibujar barras de vida
         self.juan.draw_health_bar(self.screen, self.camera_x, self.camera_y)
@@ -349,7 +360,9 @@ class Game:
             self.screen.blit(victory_text, text_rect)
         
         # Información de debug
-        debug_text = f"Gusanos activos: {len(self.worm_spawner.get_worms())} | Cámara: ({int(self.camera_x)}, {int(self.camera_y)})"
+        juan_attacking = "🗡️" if self.juan_attack.is_character_attacking() else "🔵"
+        adan_attacking = "🔥" if self.adan_attack.is_character_attacking() else "🔴"
+        debug_text = f"Gusanos: {len(self.worm_spawner.get_worms())} | Juan: {juan_attacking} | Adán: {adan_attacking} | Cámara: ({int(self.camera_x)}, {int(self.camera_y)})"
         debug_surface = font_small.render(debug_text, True, (200, 200, 200))
         self.screen.blit(debug_surface, (300, 50))
     

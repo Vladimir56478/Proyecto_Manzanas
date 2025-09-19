@@ -17,6 +17,8 @@ class AdanAttack:
         self.attack_animation_frame = 0
         self.attack_animation_speed = 0.3
         self.attack_direction = "down"
+        self.attack_damage_pending = None  # Almacena el daño pendiente hasta el final de la animación
+        self.attack_enemies_target = []    # Lista de enemigos que serán afectados al final
         
         # URLs de los GIFs de ataque de Adán desde GitHub Issues
         self.attack_gif_urls = {
@@ -39,7 +41,7 @@ class AdanAttack:
                 print(f"📥 Descargando ataque {direction} desde GitHub...")
                 
                 # Descargar el GIF desde GitHub
-                response = requests.get(url)
+                response = requests.get(url, timeout=10)  # Timeout de 10 segundos
                 response.raise_for_status()
                 gif_data = BytesIO(response.content)
                 
@@ -105,19 +107,27 @@ class AdanAttack:
             
             # Verificar que la dirección existe en las animaciones
             if self.attack_direction in self.attack_animations:
-                # Si terminó la animación, resetear (igual que movimientos)
+                # Si terminó la animación, aplicar daño y resetear
                 if self.attack_animation_frame >= len(self.attack_animations[self.attack_direction]):
+                    # Aplicar daño al final de la animación
+                    if self.attack_damage_pending is not None:
+                        self.apply_pending_damage()
+                    
                     self.attack_animation_frame = 0
                     # Terminar ataque después de una animación completa
                     self.is_attacking = False
+                    self.attack_damage_pending = None
+                    self.attack_enemies_target = []
             else:
                 # Si no existe la dirección, terminar ataque
                 self.is_attacking = False
                 self.attack_animation_frame = 0
+                self.attack_damage_pending = None
+                self.attack_enemies_target = []
     
     def handle_attack_input(self, keys_pressed, enemies):
         """Maneja la entrada de ataque (tecla ESPACIO)"""
-        if keys_pressed[pygame.K_SPACE]:
+        if keys_pressed[pygame.K_SPACE] and not self.is_attacking:
             # Determinar dirección de ataque basada en las teclas actuales presionadas
             # Seguir exactamente la misma lógica que los movimientos de Adán
             direction = "down"  # Dirección por defecto
@@ -141,11 +151,11 @@ class AdanAttack:
             self.start_attack_animation(direction)
             
             # Realizar ataque cuerpo a cuerpo
-            return self.melee_attack(enemies)
+            return self.prepare_melee_attack(enemies)
         
         return False
     
-    def melee_attack(self, enemies):
+    def prepare_melee_attack(self, enemies):
         current_time = pygame.time.get_ticks()
         if current_time - self.last_attack_time < self.attack_cooldown:
             return False
@@ -174,15 +184,33 @@ class AdanAttack:
         }
         self.melee_attacks.append(melee_effect)
         
-        hit_enemy = False
+        # Preparar daño para aplicar al final de la animación
+        self.attack_damage_pending = 40
+        self.attack_enemies_target = []
+        
         for enemy in enemies:
             enemy_rect = pygame.Rect(enemy.x, enemy.y, 64, 64)
             if attack_rect.colliderect(enemy_rect):
-                enemy.take_damage(40)
-                hit_enemy = True
-                print(f"⚔️ Adán golpeó con ataque cuerpo a cuerpo hacia {self.attack_direction} (40 daño)")
+                self.attack_enemies_target.append(enemy)
         
-        return hit_enemy
+        print(f"🎯 Adán preparando ataque cuerpo a cuerpo hacia {self.attack_direction} (40 daño pendiente)")
+        return len(self.attack_enemies_target) > 0
+    
+    def apply_pending_damage(self):
+        """Aplica el daño pendiente al final de la animación de ataque"""
+        if self.attack_damage_pending is None:
+            return
+        
+        for enemy in self.attack_enemies_target:
+            if hasattr(enemy, 'alive') and enemy.alive:
+                enemy.take_damage(self.attack_damage_pending)
+                print(f"⚔️ Adán golpeó con ataque cuerpo a cuerpo hacia {self.attack_direction} ({self.attack_damage_pending} daño)")
+        
+        print(f"💥 Adán finalizó ataque cuerpo a cuerpo - {len(self.attack_enemies_target)} enemigos impactados")
+    
+    def is_character_attacking(self):
+        """Retorna True si el personaje está atacando (para bloquear movimiento)"""
+        return self.is_attacking
     
     def ranged_attack(self, target_x, target_y):
         current_time = pygame.time.get_ticks()

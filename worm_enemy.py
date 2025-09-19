@@ -60,7 +60,7 @@ class WormEnemy:
             print(f"📥 Descargando GIF del gusano desde GitHub...")
             
             # Descargar el GIF desde GitHub
-            response = requests.get(self.worm_gif_url)
+            response = requests.get(self.worm_gif_url, timeout=10)  # Timeout de 10 segundos
             response.raise_for_status()
             gif_data = BytesIO(response.content)
             
@@ -83,12 +83,18 @@ class WormEnemy:
                 
                 frames.append(pygame_surface)
             
-            # Usar los mismos frames para todas las direcciones
+            # Crear frames para diferentes direcciones
+            flipped_frames = []
+            for frame in frames:
+                # Voltear horizontalmente los frames para la dirección derecha
+                flipped_frame = pygame.transform.flip(frame, True, False)
+                flipped_frames.append(flipped_frame)
+            
             self.animations = {
                 "up": frames,
                 "down": frames,
-                "left": frames,
-                "right": frames,
+                "left": frames,          # Frames originales para la izquierda
+                "right": flipped_frames, # Frames volteados para la derecha
                 "idle": [frames[0]] if frames else []  # Primer frame para estado idle
             }
             print(f"✅ Cargada animación del gusano: {len(frames)} frames")
@@ -277,9 +283,19 @@ class WormEnemy:
                 if self.animation_frame >= len(self.animations[current_animation]):
                     self.animation_frame = 0
         else:
-            # Cuando está quieto, usar el primer frame como estado idle
+            # Cuando está quieto, mantener la dirección hacia el objetivo si existe
             self.animation_frame = 0
-            self.current_direction = "idle"
+            if self.target:
+                # Calcular la dirección hacia el objetivo cuando está quieto
+                dx = self.target.x - self.x
+                dy = self.target.y - self.y
+                
+                # Determinar dirección de mirada hacia el objetivo
+                if abs(dx) > abs(dy):
+                    self.current_direction = "right" if dx > 0 else "left"
+                else:
+                    self.current_direction = "down" if dy > 0 else "up"
+            # Si no hay objetivo, mantener la última dirección conocida (no cambiar a "idle")
     
     def draw(self, screen, camera_x, camera_y):
         """Dibuja el gusano"""

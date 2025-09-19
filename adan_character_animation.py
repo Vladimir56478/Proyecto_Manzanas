@@ -38,7 +38,7 @@ class AdanCharacter:
             try:
                 print(f"📥 Descargando {direction} desde GitHub...")
                 
-                response = requests.get(url)
+                response = requests.get(url, timeout=10)  # Timeout de 10 segundos
                 response.raise_for_status()
                 gif_data = BytesIO(response.content)
                 
