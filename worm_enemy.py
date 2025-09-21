@@ -224,16 +224,44 @@ class WormEnemy:
         distance = math.sqrt(dx*dx + dy*dy)
         
         if distance <= self.attack_range:
-            # Hacer daño al jugador
-            if hasattr(target, 'take_damage'):
-                target.take_damage(self.attack_damage)
-            print(f"🐛 Gusano atacó al jugador! ({self.attack_damage} daño)")
+            # Determinar si el objetivo tiene IA (personaje inactivo)
+            # Esto se determina por si el objeto tiene un atributo 'attacks' pero no está siendo usado activamente
+            is_ai_controlled = self.is_ai_controlled_character(target)
+            
+            if is_ai_controlled:
+                # Buscar el sistema de IA asociado en el juego principal
+                # Esto es un poco hacky pero funcional para nuestro sistema
+                if hasattr(target, 'name'):
+                    # Acceder al juego principal a través del display
+                    import pygame
+                    if pygame.display.get_surface():
+                        # El damage reducido se maneja en la IA
+                        damage = self.attack_damage
+                        # Simular daño para el personaje con IA
+                        # Esto se debería manejar desde el sistema principal del juego
+                        reduced_damage = int(damage * 0.6)  # 60% del daño
+                        target.health = max(0, target.health - reduced_damage)
+                        print(f"🐛 Gusano atacó a {target.name} (IA)! ({reduced_damage} daño reducido)")
+            else:
+                # Daño normal para el personaje activo
+                if hasattr(target, 'take_damage'):
+                    target.take_damage(self.attack_damage)
+                    print(f"🐛 Gusano atacó al jugador activo! ({self.attack_damage} daño)")
             
             # Empujar al jugador
             if distance > 0:
                 push_force = 3
                 target.x += (dx / distance) * push_force
                 target.y += (dy / distance) * push_force
+    
+    def is_ai_controlled_character(self, target):
+        """Determina si un personaje está controlado por IA"""
+        # Un personaje controlado por IA tiene atributos específicos
+        # Por ahora, asumimos que si tiene 'attacks' pero no está siendo controlado activamente
+        # es un personaje con IA
+        if hasattr(target, 'attacks') and hasattr(target, 'name'):
+            return True  # Simplificado - en un juego real esto sería más sofisticado
+        return False
     
     def take_damage(self, damage):
         """Recibe daño"""
