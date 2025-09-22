@@ -36,27 +36,25 @@ class Background:
         self.load_background(image_url)
         
     def load_background(self, url):
-        """Carga la imagen de fondo desde caché local o crea un fondo de respaldo"""
-        cache_file = "nivel1_escenario.cache"
-        
+        """Carga la imagen de fondo desde GitHub directamente como los personajes"""
         try:
-            # Intentar cargar desde caché primero
-            if os.path.exists(cache_file):
-                print("📦 Cargando escenario desde caché...")
-                with open(cache_file, 'rb') as f:
-                    image_data = BytesIO(f.read())
-                    pil_image = Image.open(image_data)
-                    
-                    # Convertir a superficie de pygame
-                    image_data = pil_image.tobytes()
-                    self.image = pygame.image.fromstring(image_data, pil_image.size, pil_image.mode)
-                    
-                    print(f"✅ Escenario cargado desde caché: {pil_image.size}")
-                    return
+            print(f"📥 Descargando escenario desde GitHub...")
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
             
-            # Si no hay caché, mostrar mensaje y crear fondo de respaldo
-            print("ℹ️ No se encontró caché del escenario, usando fondo generado")
-            self.create_fallback_background()
+            image_data = BytesIO(response.content)
+            pil_image = Image.open(image_data)
+            
+            # Convertir a superficie de pygame
+            image_string = pil_image.convert('RGBA').tobytes()
+            self.image = pygame.image.fromstring(image_string, pil_image.size, 'RGBA')
+            self.image = self.image.convert_alpha()
+            
+            # Escalar al tamaño deseado si es necesario
+            if self.image.get_width() != self.width or self.image.get_height() != self.height:
+                self.image = pygame.transform.scale(self.image, (self.width, self.height))
+            
+            print(f"✅ Escenario cargado exitosamente: {self.width}x{self.height}")
             
         except Exception as e:
             print(f"⚠️ Error cargando escenario: {e}")
@@ -256,12 +254,15 @@ class Game:
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return False
+                # Solo cerrar si NO estamos en game over
+                if not self.game_over and not self.victory:
+                    return False
+                # Si estamos en game over, no cerrar automáticamente
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
-                elif event.key == pygame.K_TAB and self.switch_cooldown <= 0:
-                    # Solo permitir cambio si ambos personajes están vivos
+                elif event.key == pygame.K_TAB and self.switch_cooldown <= 0 and not self.game_over:
+                    # Solo permitir cambio si ambos personajes están vivos y no hay game over
                     if self.juan.health > 0 and self.adan.health > 0:
                         if not self.juan_attack.is_character_attacking() and not self.adan_attack.is_character_attacking():
                             self.switch_character()
@@ -270,35 +271,36 @@ class Game:
                             print("⚠️ No se puede cambiar de personaje durante un ataque")
                     else:
                         print("❌ No puedes cambiar de personaje cuando uno está derribado")
-                elif event.key == pygame.K_SPACE:
-                    # Ataque básico del personaje actual
+                elif event.key == pygame.K_SPACE and not self.game_over:
+                    # Ataque básico del personaje actual (solo si no hay game over)
                     self.perform_basic_attack()
-                elif event.key == pygame.K_x:
-                    # Ataque especial
+                elif event.key == pygame.K_x and not self.game_over:
+                    # Ataque especial (solo si no hay game over)
                     self.perform_special_attack()
                 elif event.key == pygame.K_r and (self.game_over or self.victory):
                     # Reiniciar juego
                     self.restart_game()
         
-        # Manejar tecla E para revivir (verificar estado continuo)
-        e_key_pressed = keys_pressed[pygame.K_e]
+        # Manejar tecla E para revivir solo si el juego no ha terminado
+        e_key_pressed = keys_pressed[pygame.K_e]  # Mover al inicio
         
-        # Verificar si se puede revivir al personaje inactivo
-        if self.inactive_character.health <= 0 and not self.inactive_ai.is_being_revived:
-            distance_to_inactive = self.distance_between_characters()
-            
-            if distance_to_inactive <= self.revival_distance:
-                self.show_revival_prompt = True
+        if not self.game_over:
+            # Verificar si se puede revivir al personaje inactivo
+            if self.inactive_character.health <= 0 and not self.inactive_ai.is_being_revived:
+                distance_to_inactive = self.distance_between_characters()
                 
-                if e_key_pressed and not self.revival_key_pressed:
-                    # Iniciar proceso de revivir
-                    if self.inactive_ai.start_revival():
-                        print(f"🔄 Comenzando a revivir a {self.inactive_character.name}...")
-                        self.show_revival_prompt = False
+                if distance_to_inactive <= self.revival_distance:
+                    self.show_revival_prompt = True
+                    
+                    if e_key_pressed and not self.revival_key_pressed:
+                        # Iniciar proceso de revivir
+                        if self.inactive_ai.start_revival():
+                            print(f"🔄 Comenzando a revivir a {self.inactive_character.name}...")
+                            self.show_revival_prompt = False
+                else:
+                    self.show_revival_prompt = False
             else:
                 self.show_revival_prompt = False
-        else:
-            self.show_revival_prompt = False
         
         self.revival_key_pressed = e_key_pressed
         return True
@@ -350,7 +352,11 @@ class Game:
     
     def update(self):
         """Actualiza la lógica del juego"""
+        # Si hay game over o victoria, solo actualizar cooldowns básicos
         if self.game_over or self.victory:
+            # Reducir cooldown de cambio
+            if self.switch_cooldown > 0:
+                self.switch_cooldown -= 1
             return
             
         keys_pressed = pygame.key.get_pressed()
@@ -363,18 +369,24 @@ class Game:
         if self.inactive_character.health > 0 or self.inactive_ai.is_being_revived:
             worms = self.worm_spawner.get_worms()
             self.inactive_ai.update(worms)
+            
+            # Actualizar animaciones del personaje IA basado en su estado
+            ai_animation_state = self.inactive_ai.get_animation_state()
+            self.inactive_character.update(keys_pressed=None, ai_controlled=True, ai_direction=ai_animation_state)
+        else:
+            # Si está muerto, actualizar con animación parada en dirección actual
+            self.inactive_character.update(keys_pressed=None, ai_controlled=True, ai_direction=None)
         
         # Manejar ataques del personaje activo con tecla ESPACIO
         worms = self.worm_spawner.get_worms()
         self.active_attack_system.handle_attack_input(keys_pressed, worms)
         
-        # Verificar si ambos personajes murieron
-        if self.juan.health <= 0 and self.adan.health <= 0 and not self.inactive_ai.is_being_revived:
+        # NUEVO: Verificar si el personaje controlado por el jugador ha muerto
+        if self.active_character.health <= 0:
             self.game_over = True
-            print("💀 GAME OVER - Ambos personajes han muerto")
+            print(f"💀 GAME OVER - {self.active_character.name} ha muerto")
         
-        # Contar enemigos derrotados después de que los ataques se procesen
-        # Contar enemigos derrotados después de que los ataques se procesen
+        # Verificar condición de victoria
         current_worm_count = len(self.worm_spawner.get_worms())
         total_worms_created = len(self.worm_spawner.worms)  # Incluye vivos y muertos
         self.enemies_defeated = total_worms_created - current_worm_count
@@ -616,8 +628,15 @@ class Game:
         
         # Estados especiales
         if self.game_over:
-            game_over_text = font.render("💀 GAME OVER - Presiona R para reiniciar", True, (255, 0, 0))
+            game_over_text = font.render("💀 GAME OVER - Presiona R para reintentar", True, (255, 0, 0))
             text_rect = game_over_text.get_rect(center=(self.screen_width//2, self.screen_height//2))
+            
+            # Fondo semi-transparente para el texto
+            overlay = pygame.Surface((self.screen_width, self.screen_height))
+            overlay.set_alpha(128)
+            overlay.fill((0, 0, 0))
+            self.screen.blit(overlay, (0, 0))
+            
             self.screen.blit(game_over_text, text_rect)
         
         elif self.victory:

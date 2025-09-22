@@ -134,15 +134,15 @@ class JuanAttack:
             # Seguir exactamente la misma lógica que los movimientos
             direction = "down"  # Dirección por defecto
             
-            # Detectar dirección actual basada en teclas presionadas (igual que movimientos)
+            # Detectar dirección actual basada en teclas presionadas (INVERTIDO para control manual)
             if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
-                direction = "down"  # Misma inversión que en movimientos
+                direction = "down"  # INVERTIDO: era "up"
             elif keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
-                direction = "up"    # Misma inversión que en movimientos
+                direction = "up"    # INVERTIDO: era "down"
             elif keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
-                direction = "right" # Misma inversión que en movimientos
+                direction = "right" # INVERTIDO: era "left"
             elif keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
-                direction = "left"  # Misma inversión que en movimientos
+                direction = "left"  # INVERTIDO: era "right"
             else:
                 # Si no hay teclas presionadas, usar dirección actual del personaje
                 direction = getattr(self.character, 'current_direction', 'down')
@@ -168,19 +168,19 @@ class JuanAttack:
         base_damage = 15 + (self.combo_count * 5)
         range_multiplier = 1 + (self.combo_count * 0.5)
         
-        # Crear área de ataque direccional (usando direcciones invertidas igual que los GIFs)
+        # Crear área de ataque direccional (INVERTIDO para coincidir con GIFs)
         attack_range = int(70 * range_multiplier)
         if self.attack_direction == "up":
-            # Cuando el GIF es "up" (que está invertido), el área debe ser abajo
+            # GIF "up" atacando hacia arriba, área hacia arriba
             attack_rect = pygame.Rect(self.character.x - 20, self.character.y + 32, 104, attack_range)
         elif self.attack_direction == "down":
-            # Cuando el GIF es "down" (que está invertido), el área debe ser arriba
+            # GIF "down" atacando hacia abajo, área hacia abajo  
             attack_rect = pygame.Rect(self.character.x - 20, self.character.y - attack_range, 104, attack_range + 32)
         elif self.attack_direction == "left":
-            # Cuando el GIF es "left" (que está invertido), el área debe ser derecha
+            # GIF "left" atacando hacia izquierda, área hacia izquierda
             attack_rect = pygame.Rect(self.character.x + 32, self.character.y - 20, attack_range, 104)
         elif self.attack_direction == "right":
-            # Cuando el GIF es "right" (que está invertido), el área debe ser izquierda
+            # GIF "right" atacando hacia derecha, área hacia derecha
             attack_rect = pygame.Rect(self.character.x - attack_range, self.character.y - 20, attack_range + 32, 104)
         else:
             # Ataque circular por defecto

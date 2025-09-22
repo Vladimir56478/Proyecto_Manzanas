@@ -81,7 +81,7 @@ class JuanCharacter:
         
         return False
     
-    def update(self, keys_pressed):
+    def update(self, keys_pressed=None, ai_controlled=False, ai_direction=None):
         self.moving = False
         
         if self.invulnerable:
@@ -89,25 +89,42 @@ class JuanCharacter:
             if current_time - self.invulnerable_time >= self.invulnerable_duration:
                 self.invulnerable = False
         
-        if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
-            self.y -= self.speed
-            self.current_direction = "down"
-            self.moving = True
-            
-        elif keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
-            self.y += self.speed
-            self.current_direction = "up"
-            self.moving = True
-            
-        elif keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
-            self.x -= self.speed
-            self.current_direction = "right"
-            self.moving = True
-            
-        elif keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
-            self.x += self.speed
-            self.current_direction = "left"
-            self.moving = True
+        # Si está controlado por IA
+        if ai_controlled:
+            if ai_direction:
+                # IA se está moviendo
+                self.current_direction = ai_direction
+                self.moving = True
+                self.animation_frame += self.animation_speed
+                if self.animation_frame >= len(self.animations[self.current_direction]):
+                    self.animation_frame = 0
+            else:
+                # IA está quieto, mantener dirección actual sin animación
+                self.moving = False
+                self.animation_frame = 0
+            return
+        
+        # Control manual normal - DIRECCIONES INVERTIDAS
+        if keys_pressed:
+            if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
+                self.y -= self.speed
+                self.current_direction = "down"  # INVERTIDO: era "up"
+                self.moving = True
+                
+            elif keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
+                self.y += self.speed
+                self.current_direction = "up"    # INVERTIDO: era "down"
+                self.moving = True
+                
+            elif keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
+                self.x -= self.speed
+                self.current_direction = "right" # INVERTIDO: era "left"
+                self.moving = True
+                
+            elif keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
+                self.x += self.speed
+                self.current_direction = "left"  # INVERTIDO: era "right"
+                self.moving = True
         
         if self.moving:
             self.animation_frame += self.animation_speed
@@ -122,16 +139,17 @@ class JuanCharacter:
             frame_index = int(self.animation_frame) % len(current_frames)
             current_sprite = current_frames[frame_index]
             
+            # Crear superficie temporal para remover fondos negros
+            temp_surface = current_sprite.copy()
+            temp_surface.set_colorkey((0, 0, 0))  # Hacer negro transparente
+            
             if self.invulnerable:
                 current_time = pygame.time.get_ticks()
                 if (current_time // 100) % 2:
-                    current_sprite = current_sprite.copy()
-                    current_sprite.set_alpha(128)
+                    temp_surface.set_alpha(128)
             
-            screen.blit(current_sprite, (self.x - camera_x, self.y - camera_y))
-        else:
-            placeholder_rect = pygame.Rect(self.x - camera_x, self.y - camera_y, 64, 64)
-            pygame.draw.rect(screen, (0, 255, 0), placeholder_rect)
+            screen.blit(temp_surface, (self.x - camera_x, self.y - camera_y))
+        # NO renderizar placeholder cuando no hay animaciones
 
     def draw_health_bar(self, screen, camera_x, camera_y):
         if self.health < self.max_health:
@@ -145,3 +163,10 @@ class JuanCharacter:
             health_width = int((self.health / self.max_health) * bar_width)
             health_color = (0, 255, 0) if self.health > 30 else (255, 255, 0) if self.health > 15 else (255, 0, 0)
             pygame.draw.rect(screen, health_color, (bar_x, bar_y, health_width, bar_height))
+    
+    def start_ai_attack(self, direction):
+        """Inicia animación de ataque desde IA"""
+        if hasattr(self, 'attacks') and self.attacks:
+            self.attacks.start_attack_animation(direction)
+            return True
+        return False
