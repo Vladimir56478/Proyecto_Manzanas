@@ -3,8 +3,6 @@ import sys
 import random
 import math
 import time
-import requests
-from io import BytesIO
 from audio_manager import get_audio_manager
 
 class Particle:
@@ -58,6 +56,11 @@ class IntroCinematica:
         # Cargar y reproducir música de fondo
         self.load_background_music()
         
+        # Sistema de narrador con archivo unificado
+        self.narrator_audio = None
+        self.narrator_playing = False
+        self.load_narrator_audio()
+        
         # Colores
         self.bg_color = (45, 25, 85)  # Morado oscuro
         self.text_color = (255, 255, 255)  # Blanco
@@ -72,52 +75,42 @@ class IntroCinematica:
         self.particles = [Particle(random.uniform(0, self.screen_width), 
                                  random.uniform(0, self.screen_height)) for _ in range(50)]
         
-        # Historia dividida en fragmentos cinematográficos
+        # Historia dividida en fragmentos cinematográficos - VERSIÓN CALIBRADA
+        # Cada entrada tiene: [texto, tiempo_inicio_segundos, tiempo_fin_segundos]
+        # NOTA: Timestamps calibrados con narrator_calibrator.py usando archivo completo
         self.story_fragments = [
-            "En un rincón soleado del valle, rodeado de montañas y árboles frutales,",
-            "existía un pequeño huerto de manzanas donde la vida era tranquila",
-            "y dulce como la miel.",
-            "",
-            "Allí vivían Adán, Juan y María.",
-            "",
-            "Pero no te confundas...",
-            "",
-            "Aunque Adán y Juan eran fuertes y trabajadores,",
-            "la verdadera líder del huerto era María",
-            "—una mujer decidida, inteligente y con el corazón más grande del mundo.",
-            "",
-            "Bajo su guía, los tres cuidaban los manzanos,",
-            "cosechaban frutas jugosas y compartían risas",
-            "desde el amanecer hasta el atardecer.",
-            "",
-            "Cada día era una fiesta de colores, sabores y amistad.",
-            "",
-            "Todo parecía perfecto...",
-            "",
-            "Hasta que un día...",
-            "",
-            "Desde lo profundo del bosque, llegó una figura misteriosa:",
-            "un chamán encapuchado, montado en una vieja carreta",
-            "tirada por un caballo oscuro.",
-            "",
-            "Sin previo aviso, el chamán lanzó una nube de polvo extraño...",
-            "y secuestró a María.",
-            "",
-            "Adán y Juan, aún atónitos, no pudieron hacer nada.",
-            "La carreta se perdió entre la neblina del bosque.",
-            "",
-            "El huerto, que antes rebosaba de vida, quedó en silencio.",
-            "",
-            "Pero una cosa era segura:",
-            "",
-            "Adán y Juan harían todo lo posible para traer de vuelta",
-            "a su jefa... su amiga... su familia."
+            ["En un rincón soleado del valle, rodeado de montañas y árboles frutales,", 0.0, 4.5],
+            ["existía un pequeño huerto de manzanas donde la vida era tranquila", 4.5, 8.6],
+            ["y dulce como la miel.", 8.6, 9.9],
+            ["Allí vivían Adán, Juan y María.", 9.9, 13.2],
+            ["Pero no te confundas...", 13.2, 14.8],
+            ["Aunque Adán y Juan eran fuertes y trabajadores,", 14.8, 18.1],
+            ["la verdadera líder del huerto era María", 18.1, 20.8],
+            ["Bajo su guía, los tres cuidaban los manzanos,", 20.8, 23.8],
+            ["cosechaban frutas y compartían risas", 23.8, 26.5],
+            ["hasta el amanecer.", 26.5, 27.7],
+            ["Cada día era una fiesta de colores, sabores y amistad.", 27.7, 32.0],
+            ["Todo parecía perfecto...", 32.0, 33.5],
+            ["Hasta que un día...", 33.5, 35.2],
+            ["Desde lo profundo del bosque, llegó una figura misteriosa:", 35.2, 39.2],
+            ["un chamán encapuchado, montado en una vieja carreta", 39.2, 43.3],
+            ["tirada por un caballo oscuro.", 43.3, 44.4],
+            ["Sin previo aviso, el chamán lanzó una nube de polvo extraño...", 44.4, 50.0],
+            ["y secuestró a María.", 50.0, 51.8],
+            ["Adán y Juan, aún atónitos, no pudieron hacer nada.", 51.8, 56.3],
+            ["La carreta se perdió entre la neblina del bosque.", 56.3, 58.9],
+            ["El huerto, que antes rebosaba de vida, quedó en silencio.", 58.9, 62.3],
+            ["Pero una cosa era segura:", 62.3, 64.4],
+            ["Adán y Juan harían todo lo posible para traer de vuelta", 64.4, 67.9],
+            ["a su jefa... su amiga... su familia.", 67.9, 71.3],
         ]
+
+        # Duración total del narrador (actualizada según calibración completa)
+        self.narrator_total_duration = 71.3  # Calibración completa
         
         # Estado de la intro
         self.current_fragment = 0
-        self.fragment_timer = 0
-        self.fragment_display_time = 120  # 2 segundos a 60 FPS
+        self.narrator_start_time = None  # Tiempo cuando inició el narrador
         self.intro_complete = False
         self.show_menu = False
         
@@ -140,133 +133,137 @@ class IntroCinematica:
             print("✅ Música de intro reproduciéndose")
         except Exception as e:
             print(f"⚠️ Error con AudioManager: {e}")
+    
+    def load_narrator_audio(self):
+        """Carga el audio del narrador unificado"""
+        try:
+            audio = get_audio_manager()
+            # Precargar el audio del narrador unificado pero no reproducirlo aún
+            narrator_path = "sounds/music/Audio narrador del juego intro, COMPLETO.mp3"
+            pygame.mixer.music.load(narrator_path)
+            print("🎙️ Audio del narrador unificado cargado")
+        except Exception as e:
+            print(f"⚠️ Error cargando narrador: {e}")
+    
+    def start_narrator(self):
+        """Inicia la reproducción del audio del narrador unificado"""
+        try:
+            if not self.narrator_playing:
+                # Detener música de fondo temporalmente
+                audio = get_audio_manager()
+                audio.stop_music()
+                
+                # Reproducir narrador unificado
+                narrator_path = "sounds/music/Audio narrador del juego intro, COMPLETO.mp3"
+                pygame.mixer.music.load(narrator_path)
+                pygame.mixer.music.play()
+                self.narrator_playing = True
+                self.narrator_start_time = time.time()
+                
+                print("🎙️ Narrador unificado iniciado - Sincronización activada")
+        except Exception as e:
+            print(f"⚠️ Error iniciando narrador: {e}")
+    
+    def stop_narrator(self):
+        """Detiene el audio del narrador y restaura la música de fondo"""
+        try:
+            if self.narrator_playing:
+                pygame.mixer.music.stop()
+                self.narrator_playing = False
+                self.narrator_start_time = None  # Reset del tiempo
+                
+                # Restaurar música de fondo
+                audio = get_audio_manager()
+                audio.play_music("Melodia_Interfaz_intro", loop=-1)
+                print("🎙️ Narrador detenido - Música de fondo restaurada")
+        except Exception as e:
+            print(f"⚠️ Error deteniendo narrador: {e}")
+    
+    def is_narrator_playing(self):
+        """Verifica si el narrador está reproduciendo"""
+        return pygame.mixer.music.get_busy() and self.narrator_playing
+    
+    def get_current_fragment_by_time(self):
+        """Obtiene el fragmento actual basado en el tiempo transcurrido del narrador"""
+        if not self.narrator_playing or self.narrator_start_time is None:
+            return 0
+        
+        elapsed_time = time.time() - self.narrator_start_time
+        
+        # Buscar el fragmento correspondiente al tiempo actual
+        for i, fragment_data in enumerate(self.story_fragments):
+            text, start_time, end_time = fragment_data
+            if start_time <= elapsed_time < end_time:
+                return i
+        
+        # Si estamos entre fragmentos (en una pausa), buscar el siguiente fragmento
+        for i, fragment_data in enumerate(self.story_fragments):
+            text, start_time, end_time = fragment_data
+            if elapsed_time < start_time:
+                # Estamos antes de este fragmento, mostrar el anterior si existe
+                return max(0, i - 1)
+        
+        # Si hemos pasado todos los fragmentos, retornar el último índice
+        if elapsed_time >= self.narrator_total_duration:
+            return len(self.story_fragments)
+        
+        # Por defecto, retornar el último fragmento válido
+        return len(self.story_fragments) - 1
+    
+    def get_current_fragment_text(self):
+        """Obtiene el texto del fragmento actual"""
+        fragment_index = self.get_current_fragment_by_time()
+        if 0 <= fragment_index < len(self.story_fragments):
+            text = self.story_fragments[fragment_index][0]
+            # Solo retornar texto si no está vacío (evitar pausas)
+            return text if text.strip() else ""
+        return ""
         
     def show_loading_screen(self, screen, selected_character):
-        """Muestra pantalla de carga REAL mientras descarga assets del juego"""
-        font = pygame.font.Font(None, 36)
-        small_font = pygame.font.Font(None, 24)
+        """Muestra una transición elegante antes de iniciar el juego"""
+        font = pygame.font.Font(None, 48)
+        small_font = pygame.font.Font(None, 32)
         
-        # Lista de assets que necesita el juego con sus URLs
-        assets_to_load = [
-            {
-                "name": "Escenario Nivel 1",
-                "url": "https://github.com/user-attachments/assets/00593769-04d2-4083-a4dc-261e6a3fb3e6",
-                "filename": "nivel1_escenario.cache"
-            },
-            {
-                "name": "Sprites de Juan",
-                "url": "https://github.com/user-attachments/assets/99c2f1aa-aa9e-45b7-9fc0-a4c4b7e63f8c",
-                "filename": "juan_sprites.cache"
-            },
-            {
-                "name": "Sprites de Adán", 
-                "url": "https://github.com/user-attachments/assets/92e3b5b0-aece-4ab9-8e5a-a9b1a1c50a02",
-                "filename": "adan_sprites.cache"
-            },
-            {
-                "name": "Enemigos Worm",
-                "url": "https://github.com/user-attachments/assets/6aa0e088-9a4b-42fe-bb58-65bfe2b84a5a", 
-                "filename": "worm_enemy.cache"
-            }
-        ]
-        
-        total_assets = len(assets_to_load)
-        loaded_assets = 0
-        
-        for i, asset in enumerate(assets_to_load):
-            # Actualizar pantalla antes de cargar cada asset
+        # Efecto de transición con fade
+        for alpha in range(0, 255, 15):  # Fade in
             screen.fill((0, 0, 0))
             
-            # Calcular progreso
-            progress = i / total_assets
-            
-            # Título
-            title_text = font.render(f"Cargando Nivel 1 - {selected_character.upper()}", True, (255, 255, 255))
-            title_rect = title_text.get_rect(center=(screen.get_width()//2, 200))
+            # Título principal
+            title_text = font.render(f"Iniciando Nivel 1", True, (255, 255, 255))
+            title_rect = title_text.get_rect(center=(screen.get_width()//2, 280))
             screen.blit(title_text, title_rect)
             
-            # Estado actual
-            state_text = small_font.render(f"Descargando: {asset['name']}...", True, (200, 200, 200))
-            state_rect = state_text.get_rect(center=(screen.get_width()//2, 250))
-            screen.blit(state_text, state_rect)
+            # Personaje seleccionado
+            char_text = small_font.render(f"Personaje: {selected_character.upper()}", True, (255, 215, 0))
+            char_rect = char_text.get_rect(center=(screen.get_width()//2, 340))
+            screen.blit(char_text, char_rect)
             
-            # Barra de progreso
-            bar_width = 400
-            bar_height = 20
-            bar_x = (screen.get_width() - bar_width) // 2
-            bar_y = 300
+            # Mensaje motivacional
+            message_text = small_font.render("¡Prepárate para rescatar a María!", True, (200, 255, 200))
+            message_rect = message_text.get_rect(center=(screen.get_width()//2, 380))
+            screen.blit(message_text, message_rect)
             
-            # Fondo de la barra
-            pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
-            
-            # Progreso
-            progress_width = int(bar_width * progress)
-            pygame.draw.rect(screen, (0, 255, 100), (bar_x, bar_y, progress_width, bar_height))
-            
-            # Borde de la barra
-            pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
-            
-            # Porcentaje
-            percent_text = small_font.render(f"{int(progress * 100)}%", True, (255, 255, 255))
-            percent_rect = percent_text.get_rect(center=(screen.get_width()//2, bar_y + 40))
-            screen.blit(percent_text, percent_rect)
+            # Efecto de partículas doradas
+            for _ in range(20):
+                x = random.randint(100, screen.get_width() - 100)
+                y = random.randint(200, 500)
+                size = random.randint(2, 6)
+                color = (255, 215, 0, min(alpha, 200))
+                # Crear superficie temporal para alpha
+                temp_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
+                pygame.draw.circle(temp_surface, color, (size, size), size)
+                screen.blit(temp_surface, (x - size, y - size))
             
             pygame.display.flip()
-            
-            # DESCARGA REAL del asset
-            try:
-                print(f"📥 Descargando {asset['name']}...")
-                response = requests.get(asset['url'], timeout=30)
-                response.raise_for_status()
-                
-                # Guardar en caché para futuras cargas más rápidas
-                with open(asset['filename'], 'wb') as f:
-                    f.write(response.content)
-                
-                print(f"✅ {asset['name']} descargado ({len(response.content)} bytes)")
-                loaded_assets += 1
-                
-            except Exception as e:
-                print(f"⚠️ Error descargando {asset['name']}: {e}")
-                # Continuar con el siguiente asset
+            pygame.time.wait(50)  # 50ms por frame = transición suave
             
             # Procesar eventos para evitar que se cuelgue
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return False
         
-        # Mostrar carga completa
-        screen.fill((0, 0, 0))
-        
-        # Título
-        title_text = font.render(f"Nivel 1 - {selected_character.upper()} LISTO", True, (0, 255, 0))
-        title_rect = title_text.get_rect(center=(screen.get_width()//2, 200))
-        screen.blit(title_text, title_rect)
-        
-        # Estado final
-        state_text = small_font.render("¡Todos los assets cargados! Iniciando juego...", True, (200, 255, 200))
-        state_rect = state_text.get_rect(center=(screen.get_width()//2, 250))
-        screen.blit(state_text, state_rect)
-        
-        # Barra completa
-        pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
-        pygame.draw.rect(screen, (0, 255, 100), (bar_x, bar_y, bar_width, bar_height))
-        pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
-        
-        # 100%
-        percent_text = small_font.render("100%", True, (255, 255, 255))
-        percent_rect = percent_text.get_rect(center=(screen.get_width()//2, bar_y + 40))
-        screen.blit(percent_text, percent_rect)
-        
-        # Efecto de partículas de éxito
-        for _ in range(30):
-            x = random.randint(bar_x, bar_x + bar_width)
-            y = random.randint(bar_y - 10, bar_y + bar_height + 10)
-            color = (random.randint(100, 255), random.randint(200, 255), random.randint(100, 255))
-            pygame.draw.circle(screen, color, (x, y), random.randint(2, 5))
-        
-        pygame.display.flip()
-        pygame.time.wait(1000)  # Mostrar resultado por 1 segundo
+        # Pausa final antes de iniciar
+        pygame.time.wait(800)  # 0.8 segundos
         
         return True
         
@@ -279,7 +276,10 @@ class IntroCinematica:
                 if not self.intro_complete:
                     # Saltar intro con cualquier tecla
                     if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
+                        # Detener narrador al saltar intro
+                        self.stop_narrator()
                         self.intro_complete = True
+                        self.show_menu = True
                         self.show_menu = True
                 elif self.show_menu and not self.character_selection:
                     # Navegación del menú principal
@@ -321,14 +321,46 @@ class IntroCinematica:
         
         # Actualizar progreso de la historia
         if not self.intro_complete:
-            self.fragment_timer += 1
-            if self.fragment_timer >= self.fragment_display_time:
-                self.fragment_timer = 0
-                self.current_fragment += 1
+            # Iniciar narrador al comenzar el primer fragmento
+            if self.current_fragment == 0 and not self.narrator_playing:
+                self.start_narrator()
+            
+            # Actualizar fragmento basado en tiempo del narrador
+            if self.narrator_playing and self.narrator_start_time:
+                elapsed_time = time.time() - self.narrator_start_time
+                new_fragment = self.get_current_fragment_by_time()
                 
-                if self.current_fragment >= len(self.story_fragments):
+                # Cambiar fragmento si es necesario
+                if new_fragment != self.current_fragment:
+                    self.current_fragment = new_fragment
+                    if self.current_fragment < len(self.story_fragments):
+                        current_text = self.story_fragments[self.current_fragment][0]
+                        if current_text.strip():  # Solo mostrar si no es una pausa vacía
+                            print(f"📖 Fragmento {self.current_fragment + 1}: '{current_text[:50]}...'")
+                
+                # Verificar si el narrador debería haber terminado según la duración total
+                if elapsed_time >= self.narrator_total_duration:
+                    print(f"⏰ Narrador completado naturalmente en {elapsed_time:.1f}s")
+                    self.stop_narrator()
                     self.intro_complete = True
                     self.show_menu = True
+                    return
+                
+                # Verificar si hemos pasado todos los fragmentos
+                if self.current_fragment >= len(self.story_fragments):
+                    print("📚 Todos los fragmentos completados")
+                    self.stop_narrator()
+                    self.intro_complete = True
+                    self.show_menu = True
+                    return
+        
+        # Verificar si el narrador terminó de reproducir naturalmente (backup check)
+        if self.narrator_playing and not self.is_narrator_playing():
+            print("🔊 Audio del narrador terminó de reproducirse")
+            self.stop_narrator()
+            if not self.intro_complete:
+                self.intro_complete = True
+                self.show_menu = True
     
     def draw_particles(self):
         """Dibuja las partículas amarillentas"""
@@ -336,39 +368,97 @@ class IntroCinematica:
             particle.draw(self.screen)
     
     def draw_story(self):
-        """Dibuja el fragmento actual de la historia"""
-        if self.current_fragment < len(self.story_fragments):
-            text = self.story_fragments[self.current_fragment]
-            if text.strip():  # Solo dibujar si no es línea vacía
-                # Dividir texto largo en múltiples líneas
-                words = text.split()
-                lines = []
-                current_line = ""
-                
-                for word in words:
-                    test_line = current_line + " " + word if current_line else word
-                    text_surface = self.text_font.render(test_line, True, self.text_color)
-                    if text_surface.get_width() > self.screen_width - 100:
-                        lines.append(current_line)
-                        current_line = word
-                    else:
-                        current_line = test_line
-                lines.append(current_line)
-                
-                # Centrar las líneas
-                total_height = len(lines) * 40
-                start_y = self.screen_height // 2 - total_height // 2
-                
-                for i, line in enumerate(lines):
-                    text_surface = self.text_font.render(line, True, self.text_color)
-                    text_rect = text_surface.get_rect(center=(self.screen_width//2, start_y + i * 40))
-                    self.screen.blit(text_surface, text_rect)
+        """Dibuja el fragmento actual de la historia sincronizado con el narrador"""
+        current_text = self.get_current_fragment_text()
         
-        # Indicador para continuar
-        if self.current_fragment < len(self.story_fragments) - 1:
-            continue_text = self.text_font.render("Presiona ESPACIO para continuar...", True, (200, 200, 200))
-            continue_rect = continue_text.get_rect(center=(self.screen_width//2, self.screen_height - 50))
-            self.screen.blit(continue_text, continue_rect)
+        if current_text and current_text.strip():  # Solo dibujar si no es línea vacía
+            # Dividir texto largo en múltiples líneas
+            words = current_text.split()
+            lines = []
+            current_line = ""
+            
+            for word in words:
+                test_line = current_line + " " + word if current_line else word
+                text_surface = self.text_font.render(test_line, True, self.text_color)
+                if text_surface.get_width() > self.screen_width - 100:
+                    lines.append(current_line)
+                    current_line = word
+                else:
+                    current_line = test_line
+            lines.append(current_line)
+            
+            # Centrar las líneas
+            total_height = len(lines) * 40
+            start_y = self.screen_height // 2 - total_height // 2
+            
+            for i, line in enumerate(lines):
+                text_surface = self.text_font.render(line, True, self.text_color)
+                text_rect = text_surface.get_rect(center=(self.screen_width//2, start_y + i * 40))
+                self.screen.blit(text_surface, text_rect)
+        
+        # Indicador para continuar o saltar
+        if self.narrator_playing:
+            skip_text = self.text_font.render("Presiona ESPACIO para saltar narración...", True, (200, 200, 200))
+            skip_rect = skip_text.get_rect(center=(self.screen_width//2, self.screen_height - 50))
+            self.screen.blit(skip_text, skip_rect)
+        
+        # Indicador de narrador activo
+        if self.narrator_playing:
+            self.draw_narrator_indicator()
+        
+        # Mostrar información de sincronización (solo para debug - comentar para versión final)
+        # if self.narrator_playing and self.narrator_start_time:
+        #     elapsed = time.time() - self.narrator_start_time
+        #     debug_font = pygame.font.Font(None, 20)
+        #     debug_text = debug_font.render(f"Tiempo: {elapsed:.1f}s | Fragmento: {self.current_fragment}", True, (100, 100, 100))
+        #     self.screen.blit(debug_text, (10, self.screen_height - 30))
+    
+    def draw_narrator_indicator(self):
+        """Dibuja un indicador visual de que el narrador está activo"""
+        # Fondo semi-transparente más grande para más información
+        indicator_rect = pygame.Rect(20, 20, 320, 100)
+        temp_surface = pygame.Surface((indicator_rect.width, indicator_rect.height), pygame.SRCALPHA)
+        pygame.draw.rect(temp_surface, (0, 0, 0, 150), (0, 0, indicator_rect.width, indicator_rect.height))
+        pygame.draw.rect(temp_surface, (255, 215, 0, 200), (0, 0, indicator_rect.width, indicator_rect.height), 2)
+        self.screen.blit(temp_surface, indicator_rect.topleft)
+        
+        # Icono de micrófono animado
+        mic_center = (indicator_rect.x + 30, indicator_rect.y + 50)
+        pulse = int(10 * abs(math.sin(pygame.time.get_ticks() / 200)))  # Efecto de pulso
+        pygame.draw.circle(self.screen, (255, 215, 0), mic_center, 8 + pulse//2)
+        pygame.draw.circle(self.screen, (255, 255, 255), mic_center, 6)
+        
+        # Texto "NARRADOR"
+        font = pygame.font.Font(None, 24)
+        narrator_text = font.render("🎙️ NARRADOR", True, (255, 215, 0))
+        text_rect = narrator_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 25))
+        self.screen.blit(narrator_text, text_rect)
+        
+        # Texto "SINCRONIZADO"
+        sync_text = font.render("SINCRONIZADO", True, (200, 255, 200))
+        sync_rect = sync_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 45))
+        self.screen.blit(sync_text, sync_rect)
+        
+        # Mostrar progreso y tiempo
+        if self.narrator_start_time:
+            elapsed = time.time() - self.narrator_start_time
+            progress_percent = min(100, (elapsed / self.narrator_total_duration) * 100)
+            
+            small_font = pygame.font.Font(None, 18)
+            
+            # Tiempo transcurrido / total
+            time_text = small_font.render(f"⏱️ {elapsed:.1f}s / {self.narrator_total_duration:.1f}s", True, (180, 180, 180))
+            time_rect = time_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 65))
+            self.screen.blit(time_text, time_rect)
+            
+            # Barra de progreso
+            progress_text = small_font.render(f"📊 {progress_percent:.1f}%", True, (180, 180, 180))
+            progress_rect = progress_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 80))
+            self.screen.blit(progress_text, progress_rect)
+            
+            # Fragmento actual
+            fragment_text = small_font.render(f"📖 Fragmento: {self.current_fragment + 1}/{len(self.story_fragments)}", True, (180, 180, 180))
+            self.screen.blit(fragment_text, (indicator_rect.x + 70, indicator_rect.y + 95))
     
     def draw_menu(self):
         """Dibuja el menú principal"""

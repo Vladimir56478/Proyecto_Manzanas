@@ -25,6 +25,9 @@ from character_ai import CharacterAI
 # Importar sistema de audio
 from audio_manager import get_audio_manager
 
+# Importar sistema de pantalla de carga
+from loading_screen import LoadingScreen
+
 class Background:
     def __init__(self, image_url, width, height):
         self.width = width
@@ -33,7 +36,7 @@ class Background:
         self.load_background(image_url)
         
     def load_background(self, url):
-        """Carga la imagen de fondo desde GitHub o caché"""
+        """Carga la imagen de fondo desde caché local o crea un fondo de respaldo"""
         cache_file = "nivel1_escenario.cache"
         
         try:
@@ -51,25 +54,44 @@ class Background:
                     print(f"✅ Escenario cargado desde caché: {pil_image.size}")
                     return
             
-            # Si no hay caché, descargar desde GitHub
-            print("📥 Descargando escenario nivel 1...")
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            
-            image_data = BytesIO(response.content)
-            pil_image = Image.open(image_data)
-            
-            # Convertir a superficie de pygame
-            image_data = pil_image.tobytes()
-            self.image = pygame.image.fromstring(image_data, pil_image.size, pil_image.mode)
-            
-            print(f"✅ Escenario cargado: {pil_image.size}")
+            # Si no hay caché, mostrar mensaje y crear fondo de respaldo
+            print("ℹ️ No se encontró caché del escenario, usando fondo generado")
+            self.create_fallback_background()
             
         except Exception as e:
-            print(f"❌ Error cargando escenario: {e}")
-            # Crear fondo de respaldo
-            self.image = pygame.Surface((self.width, self.height))
-            self.image.fill((34, 139, 34))  # Verde bosque
+            print(f"⚠️ Error cargando escenario: {e}")
+            print("🎨 Creando fondo de respaldo...")
+            self.create_fallback_background()
+    
+    def create_fallback_background(self):
+        """Crea un fondo de respaldo visualmente atractivo"""
+        # Crear superficie base
+        self.image = pygame.Surface((self.width, self.height))
+        
+        # Gradiente de cielo (azul claro a azul más oscuro)
+        for y in range(self.height):
+            color_ratio = y / self.height
+            r = int(135 * (1 - color_ratio) + 70 * color_ratio)
+            g = int(206 * (1 - color_ratio) + 130 * color_ratio)  
+            b = int(235 * (1 - color_ratio) + 180 * color_ratio)
+            pygame.draw.line(self.image, (r, g, b), (0, y), (self.width, y))
+        
+        # Agregar algunas "colinas" verdes en el fondo
+        hill_points = [
+            (0, self.height * 0.7),
+            (self.width * 0.3, self.height * 0.6),
+            (self.width * 0.7, self.height * 0.65),
+            (self.width, self.height * 0.7),
+            (self.width, self.height),
+            (0, self.height)
+        ]
+        pygame.draw.polygon(self.image, (34, 139, 34), hill_points)  # Verde bosque
+        
+        # Agregar suelo
+        ground_rect = pygame.Rect(0, self.height * 0.8, self.width, self.height * 0.2)
+        pygame.draw.rect(self.image, (139, 69, 19), ground_rect)  # Marrón tierra
+        
+        print("✅ Fondo de respaldo creado exitosamente")
     
     def draw(self, screen, camera_x, camera_y, screen_width, screen_height):
         """Dibuja el fondo con desplazamiento de cámara"""
@@ -94,24 +116,66 @@ class Game:
         self.clock = pygame.time.Clock()
         self.fps = 60
         
+        # Crear sistema de loading screen
+        self.loading_screen = LoadingScreen(self.screen)
+        
+        # Lista de assets que se cargarán
+        assets_to_load = [
+            {"name": "Escenario", "description": "Fondo del nivel 1"},
+            {"name": "Juan - Animaciones", "description": "Sprites de movimiento"},
+            {"name": "Juan - Ataques", "description": "Animaciones de combate"},
+            {"name": "Adan - Animaciones", "description": "Sprites de movimiento"},
+            {"name": "Adan - Ataques", "description": "Animaciones de combate"},
+            {"name": "Enemigos Worm", "description": "Sprites de gusanos"},
+            {"name": "Sistema IA", "description": "Inteligencia artificial"},
+            {"name": "Audio", "description": "Efectos de sonido"}
+        ]
+        
+        # Iniciar pantalla de carga
+        self.loading_screen.start_loading(assets_to_load)
+        
+        # Mostrar pantalla de carga inicial
+        self.loading_screen.set_custom_message("Preparando el mundo...")
+        self.loading_screen.draw()
+        
         # URLs del escenario desde GitHub
         escenario_url = "https://github.com/user-attachments/assets/00593769-04d2-4083-a4dc-261e6a3fb3e6"
         
-        # Crear personajes usando las clases específicas
-        self.juan = JuanCharacter(400, 300)
-        self.adan = AdanCharacter(500, 300)
+        # Cargar escenario con progreso
+        self.loading_screen.update_progress("Escenario", "Descargando fondo del nivel...")
+        self.loading_screen.draw()
+        self.background = Background(escenario_url, 1536, 512)
         
-        # Configurar atributos de salud para los personajes
+        # Cargar personajes con progreso
+        self.loading_screen.update_progress("Juan - Animaciones", "Cargando sprites de Juan...")
+        self.loading_screen.draw()
+        self.juan = JuanCharacter(400, 300)
+        
+        self.loading_screen.update_progress("Juan - Ataques", "Configurando ataques de Juan...")
+        self.loading_screen.draw()
+        # Configurar atributos de salud para Juan
         self.juan.max_health = 100
         self.juan.health = 100
         self.juan.speed = 4
         
+        self.loading_screen.update_progress("Adan - Animaciones", "Cargando sprites de Adan...")
+        self.loading_screen.draw()
+        self.adan = AdanCharacter(500, 300)
+        
+        self.loading_screen.update_progress("Adan - Ataques", "Configurando ataques de Adan...")
+        self.loading_screen.draw()
+        # Configurar atributos de salud para Adan
         self.adan.max_health = 100
         self.adan.health = 100
         self.adan.speed = 4
         
-        # Sistemas de ataque
+        # Cargar sistemas de ataque con progreso
+        self.loading_screen.update_progress("Juan - Ataques", "Inicializando sistema de combate Juan...")
+        self.loading_screen.draw()
         self.juan_attack = JuanAttack(self.juan)
+        
+        self.loading_screen.update_progress("Adan - Ataques", "Inicializando sistema de combate Adan...")
+        self.loading_screen.draw()
         self.adan_attack = AdanAttack(self.adan)
         
         # Asignar referencias de ataques a los personajes
@@ -130,13 +194,23 @@ class Game:
             self.active_attack_system = self.adan_attack
             self.inactive_attack_system = self.juan_attack
         
+        # Cargar enemigos con progreso
+        self.loading_screen.update_progress("Enemigos Worm", "Creando enemigos...")
+        self.loading_screen.draw()
+        
         # Inicializar sistema de IA para el personaje inactivo
+        self.loading_screen.update_progress("Sistema IA", "Configurando inteligencia artificial...")
+        self.loading_screen.draw()
         self.inactive_ai = CharacterAI(self.inactive_character, self.active_character)
         
         # Sistema de revival
         self.revival_key_pressed = False
         self.show_revival_prompt = False
         self.revival_distance = 80  # Distancia para poder revivir
+        
+        # Inicializar AudioManager con progreso
+        self.loading_screen.update_progress("Audio", "Configurando sistema de audio...")
+        self.loading_screen.draw()
         
         print(f"🎮 Personaje activo: {self.active_character.name}")
         print(f"🤖 IA controlando: {self.inactive_character.name}")
@@ -148,15 +222,19 @@ class Game:
         self.camera_x = 0
         self.camera_y = 0
         
-        # Escenario
-        self.background = Background(escenario_url, 1536, 512)
-        
         # Control de alternancia
         self.switch_cooldown = 0
         
-        # Sistema de enemigos
+        # Sistema de enemigos con progreso
+        self.loading_screen.update_progress("Sistema Enemigos", "Preparando generación de enemigos...")
+        self.loading_screen.draw()
         self.worm_spawner = WormSpawner(max_worms=3)
         self.setup_enemy_spawns()
+        
+        # Finalizar carga
+        self.loading_screen.update_progress("Completado", "¡Iniciando batalla!")
+        self.loading_screen.draw()
+        pygame.time.wait(1000)  # Mostrar mensaje final por 1 segundo
         
         # Estado del juego
         self.game_over = False
