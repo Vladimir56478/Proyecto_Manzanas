@@ -456,17 +456,11 @@ class Game:
         self.background.draw(self.screen, self.camera_x, self.camera_y, self.screen_width, self.screen_height)
         
         # Dibujar ambos personajes si están vivos y no atacando
-        # Personaje inactivo (con transparencia si está vivo)
+        # Personaje inactivo (usando sistema de animación normal para mostrar GIFs en movimiento)
         if self.inactive_character.health > 0:
             if not self.inactive_attack_system.is_character_attacking():
-                inactive_surface = pygame.Surface((64, 64))
-                inactive_surface.set_alpha(150)
-                if hasattr(self.inactive_character, 'current_direction') and self.inactive_character.current_direction in self.inactive_character.animations:
-                    frames = self.inactive_character.animations[self.inactive_character.current_direction]
-                    if frames:
-                        frame = frames[0]
-                        inactive_surface.blit(frame, (0, 0))
-                        self.screen.blit(inactive_surface, (self.inactive_character.x - self.camera_x, self.inactive_character.y - self.camera_y))
+                # Usar el método draw normal del personaje para animaciones fluidas
+                self.inactive_character.draw(self.screen, self.camera_x, self.camera_y)
         
         # Personaje activo (normal)
         if not self.active_attack_system.is_character_attacking():

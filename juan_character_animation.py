@@ -139,17 +139,22 @@ class JuanCharacter:
             frame_index = int(self.animation_frame) % len(current_frames)
             current_sprite = current_frames[frame_index]
             
-            # Crear superficie temporal para remover fondos negros
+            # Crear superficie temporal con mejor manejo de transparencia
             temp_surface = current_sprite.copy()
-            temp_surface.set_colorkey((0, 0, 0))  # Hacer negro transparente
             
+            # Aplicar transparencia para fondos (negro y blanco)
+            if temp_surface.get_bitsize() >= 24:
+                temp_surface = temp_surface.convert_alpha()
+            temp_surface.set_colorkey((0, 0, 0))  # Negro transparente
+            
+            # Efecto de invulnerabilidad
             if self.invulnerable:
                 current_time = pygame.time.get_ticks()
                 if (current_time // 100) % 2:
                     temp_surface.set_alpha(128)
             
             screen.blit(temp_surface, (self.x - camera_x, self.y - camera_y))
-        # NO renderizar placeholder cuando no hay animaciones
+        # Si no hay animación válida, NO dibujar nada (evita recuadros oscuros)
 
     def draw_health_bar(self, screen, camera_x, camera_y):
         if self.health < self.max_health:

@@ -326,27 +326,44 @@ class CharacterAI:
         return math.sqrt(dx*dx + dy*dy)
     
     def move_towards(self, target_x, target_y):
-        """Mueve al personaje hacia una posición objetivo con animaciones realistas"""
-        # Calcular dirección
+        """Mueve al personaje hacia una posición objetivo en líneas rectas como el jugador"""
+        # Calcular diferencias
         dx = target_x - self.character.x
         dy = target_y - self.character.y
         
         # Verificar si realmente necesita moverse
         distance = math.sqrt(dx*dx + dy*dy)
-        if distance < 5:  # Si está muy cerca, no moverse
+        if distance < 10:  # Si está muy cerca, no moverse
             self.movement_direction = None
             self.is_moving = False
             return
         
-        # Normalizar para movimiento consistente
-        dx /= distance
-        dy /= distance
-        
         # Aplicar movimiento con velocidad del personaje
         speed = getattr(self.character, 'speed', 3)
-        old_x, old_y = self.character.x, self.character.y
-        self.character.x += dx * speed
-        self.character.y += dy * speed
+        
+        # NUEVO: Movimiento como jugador - primero X, luego Y
+        # Priorizar movimiento horizontal si la diferencia es significativa
+        if abs(dx) > 15:  # Umbral para movimiento horizontal
+            # Mover solo en X
+            if dx > 0:
+                self.character.x += speed
+                self.movement_direction = "right"
+            else:
+                self.character.x -= speed
+                self.movement_direction = "left"
+        elif abs(dy) > 15:  # Luego mover en Y
+            # Mover solo en Y
+            if dy > 0:
+                self.character.y += speed
+                self.movement_direction = "down"
+            else:
+                self.character.y -= speed
+                self.movement_direction = "up"
+        else:
+            # Ya está cerca, detenerse
+            self.movement_direction = None
+            self.is_moving = False
+            return
         
         # Determinar dirección de movimiento
         self.movement_direction = self.calculate_movement_direction(target_x, target_y)
