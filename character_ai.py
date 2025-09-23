@@ -237,25 +237,27 @@ class CharacterAI:
             dx = self.current_target.x - self.character.x
             dy = self.current_target.y - self.character.y
             
-            # Determinar dirección de ataque base
+            # Determinar dirección de ataque (dirección física real hacia el enemigo)
             if abs(dx) > abs(dy):
                 base_attack_direction = "right" if dx > 0 else "left"
             else:
                 base_attack_direction = "down" if dy > 0 else "up"
             
-            # INVERSIÓN ESPECÍFICA PARA JUAN en ataques IA
+            # CORRECCIÓN ESPECÍFICA PARA JUAN IA - INVERTIR ATAQUES
             if hasattr(self.character, 'name') and self.character.name == "Juan":
-                # Invertir direcciones de ataque para Juan IA
+                # Juan IA necesita direcciones invertidas para atacar correctamente
                 direction_map = {
-                    "up": "down",
-                    "down": "up", 
-                    "left": "right",
-                    "right": "left"
+                    "up": "down",     # Enemigo arriba -> atacar con GIF "down" 
+                    "down": "up",     # Enemigo abajo -> atacar con GIF "up"
+                    "left": "right",  # Enemigo izquierda -> atacar con GIF "right"
+                    "right": "left"   # Enemigo derecha -> atacar con GIF "left"
                 }
                 attack_direction = direction_map.get(base_attack_direction, base_attack_direction)
+                print(f"🎯 Juan IA: Enemigo en {base_attack_direction} -> Atacando con GIF {attack_direction}")
             else:
-                # Adán usa direcciones naturales
+                # Adán usa direcciones normales
                 attack_direction = base_attack_direction
+                print(f"🎯 {self.character.name} IA: Atacando hacia {attack_direction}")
             
             # Iniciar animación de ataque real
             if hasattr(self.character, 'start_ai_attack'):
@@ -270,13 +272,13 @@ class CharacterAI:
                 
                 # Usar el sistema de ataques del personaje
                 if hasattr(self.character.attacks, 'prepare_combo_attack'):
-                    # Para Juan - sistema de combos
+                    # Para Juan - sistema de combos con dirección corregida
                     self.character.attacks.attack_direction = attack_direction
                     hit_result = self.character.attacks.prepare_combo_attack(enemies_list)
                     if hit_result:
                         # Aplicar daño inmediatamente para IA
                         self.character.attacks.apply_pending_damage()
-                        print(f"⚔️ {self.character.name} (IA) ejecutó combo attack")
+                        print(f"⚔️ {self.character.name} (IA) ejecutó combo attack hacia {attack_direction}")
                         
                 elif hasattr(self.character.attacks, 'prepare_melee_attack'):
                     # Para Adán - ataque cuerpo a cuerpo
@@ -326,7 +328,7 @@ class CharacterAI:
         return math.sqrt(dx*dx + dy*dy)
     
     def move_towards(self, target_x, target_y):
-        """Mueve al personaje hacia una posición objetivo en líneas rectas como el jugador"""
+        """Mueve al personaje hacia una posición objetivo EXACTAMENTE como el jugador"""
         # Calcular diferencias
         dx = target_x - self.character.x
         dy = target_y - self.character.y
@@ -341,67 +343,45 @@ class CharacterAI:
         # Aplicar movimiento con velocidad del personaje
         speed = getattr(self.character, 'speed', 3)
         
-        # NUEVO: Movimiento como jugador - primero X, luego Y
-        # Priorizar movimiento horizontal si la diferencia es significativa
-        if abs(dx) > 15:  # Umbral para movimiento horizontal
-            # Mover solo en X
+        # MOVIMIENTO EXACTO COMO EL JUGADOR - priorizar dirección principal
+        # Determinar dirección principal de movimiento
+        if abs(dx) > abs(dy):
+            # Movimiento horizontal prioritario
             if dx > 0:
                 self.character.x += speed
                 self.movement_direction = "right"
             else:
                 self.character.x -= speed
                 self.movement_direction = "left"
-        elif abs(dy) > 15:  # Luego mover en Y
-            # Mover solo en Y
+        else:
+            # Movimiento vertical prioritario
             if dy > 0:
                 self.character.y += speed
                 self.movement_direction = "down"
             else:
                 self.character.y -= speed
                 self.movement_direction = "up"
-        else:
-            # Ya está cerca, detenerse
-            self.movement_direction = None
-            self.is_moving = False
-            return
-        
-        # Determinar dirección de movimiento
-        self.movement_direction = self.calculate_movement_direction(target_x, target_y)
         
         # Marcar que se está moviendo para las animaciones
         self.is_moving = True
     
     def calculate_movement_direction(self, target_x, target_y):
-        """Calcula la dirección correcta de movimiento con inversión para Juan"""
+        """Calcula la dirección correcta de movimiento SIN inversiones extrañas"""
         dx = target_x - self.character.x
         dy = target_y - self.character.y
         
-        # Determinar dirección predominante
+        # Determinar dirección predominante de manera SIMPLE
         if abs(dx) > abs(dy):
-            base_direction = "right" if dx > 0 else "left"
+            return "right" if dx > 0 else "left"
         else:
-            base_direction = "down" if dy > 0 else "up"
-        
-        # INVERSIÓN ESPECÍFICA PARA JUAN en modo IA
-        if hasattr(self.character, 'name') and self.character.name == "Juan":
-            # Invertir direcciones para Juan IA para que mire correctamente
-            direction_map = {
-                "up": "down",
-                "down": "up", 
-                "left": "right",
-                "right": "left"
-            }
-            return direction_map.get(base_direction, base_direction)
-        else:
-            # Adán y otros personajes usan direcciones naturales
-            return base_direction
+            return "down" if dy > 0 else "up"
     
     def update_direction_to_target(self, target_x, target_y):
         """Actualiza la dirección del personaje según el objetivo"""
         dx = target_x - self.character.x
         dy = target_y - self.character.y
         
-        # Determinar dirección predominante
+        # Determinar dirección predominante de manera simple
         if abs(dx) > abs(dy):
             direction = "right" if dx > 0 else "left"
         else:
@@ -419,9 +399,24 @@ class CharacterAI:
         if self.is_attacking:
             return None  # Mantendrá la animación actual
         
-        # Si se está moviendo, devolver dirección
+        # Si se está moviendo, devolver dirección EXACTA del movimiento
         if self.is_moving and self.movement_direction:
-            return self.movement_direction
+            # IMPORTANTE: Para las animaciones, las IAs deben usar las MISMAS direcciones
+            # que cuando el jugador controla manualmente
+            
+            # Si es Juan, aplicar las mismas inversiones que en el control manual
+            if hasattr(self.character, 'name') and self.character.name == "Juan":
+                # Juan tiene direcciones invertidas en control manual, aplicar lo mismo en IA
+                direction_map = {
+                    "up": "down",     # Cuando se mueve hacia arriba, anima "down"
+                    "down": "up",     # Cuando se mueve hacia abajo, anima "up"
+                    "left": "right",  # Cuando se mueve hacia izquierda, anima "right"
+                    "right": "left"   # Cuando se mueve hacia derecha, anima "left"
+                }
+                return direction_map.get(self.movement_direction, self.movement_direction)
+            else:
+                # Adán usa direcciones normales
+                return self.movement_direction
         
         # Si no se mueve, no animar (frame 0)
         return None
