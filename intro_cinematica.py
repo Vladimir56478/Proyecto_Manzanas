@@ -26,10 +26,10 @@ class Particle:
             self.reset()
     
     def reset(self):
-        self.x = random.uniform(0, 1000)
-        self.y = random.uniform(700, 750)
+        self.x = random.uniform(0, 1920)  # Escalado para pantalla completa
+        self.y = random.uniform(1080, 1150)  # Escalado para pantalla completa
         self.alpha = random.uniform(100, 255)
-        self.size = random.uniform(2, 6)
+        self.size = random.uniform(3, 9)  # Partículas más grandes
     
     def draw(self, screen):
         if self.alpha > 0:
@@ -45,9 +45,9 @@ class IntroCinematica:
         pygame.init()
         pygame.mixer.init()  # Inicializar el mixer de audio
         
-        self.screen_width = 1000
-        self.screen_height = 700
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        self.screen_width = 1920
+        self.screen_height = 1080
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.FULLSCREEN)
         pygame.display.set_caption("🍎 La Tierra de las Manzanas - Intro")
         
         self.clock = pygame.time.Clock()
@@ -66,10 +66,10 @@ class IntroCinematica:
         self.text_color = (255, 255, 255)  # Blanco
         self.title_color = (255, 215, 0)  # Dorado
         
-        # Fuentes
-        self.title_font = pygame.font.Font(None, 64)
-        self.text_font = pygame.font.Font(None, 32)
-        self.button_font = pygame.font.Font(None, 36)
+        # Fuentes escaladas para pantalla completa 1920x1080
+        self.title_font = pygame.font.Font(None, 128)  # 2x escalado
+        self.text_font = pygame.font.Font(None, 64)   # 2x escalado
+        self.button_font = pygame.font.Font(None, 72)  # 2x escalado
         
         # Sistema de partículas
         self.particles = [Particle(random.uniform(0, self.screen_width), 
@@ -114,11 +114,13 @@ class IntroCinematica:
         self.intro_complete = False
         self.show_menu = False
         
-        # Botones del menú
+        # Botones del menú reorganizados y mejor espaciados
+        button_y_start = 600  # Posición más centrada
+        button_spacing = 120  # Mayor espaciado entre botones
         self.buttons = {
-            'jugar': pygame.Rect(self.screen_width//2 - 100, 400, 200, 50),
-            'creditos': pygame.Rect(self.screen_width//2 - 100, 470, 200, 50),
-            'salir': pygame.Rect(self.screen_width//2 - 100, 540, 200, 50)
+            'jugar': pygame.Rect(self.screen_width//2 - 250, button_y_start, 500, 80),
+            'creditos': pygame.Rect(self.screen_width//2 - 250, button_y_start + button_spacing, 500, 80),
+            'salir': pygame.Rect(self.screen_width//2 - 250, button_y_start + (button_spacing * 2), 500, 80)
         }
         
         self.selected_button = 'jugar'
@@ -221,8 +223,8 @@ class IntroCinematica:
         
     def show_loading_screen(self, screen, selected_character):
         """Muestra una transición elegante antes de iniciar el juego"""
-        font = pygame.font.Font(None, 48)
-        small_font = pygame.font.Font(None, 32)
+        font = pygame.font.Font(None, 96)  # 2x escalado
+        small_font = pygame.font.Font(None, 64)  # 2x escalado
         
         # Efecto de transición con fade
         for alpha in range(0, 255, 15):  # Fade in
@@ -429,7 +431,7 @@ class IntroCinematica:
         pygame.draw.circle(self.screen, (255, 255, 255), mic_center, 6)
         
         # Texto "NARRADOR"
-        font = pygame.font.Font(None, 24)
+        font = pygame.font.Font(None, 48)  # 2x escalado
         narrator_text = font.render("🎙️ NARRADOR", True, (255, 215, 0))
         text_rect = narrator_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 25))
         self.screen.blit(narrator_text, text_rect)
@@ -444,21 +446,17 @@ class IntroCinematica:
             elapsed = time.time() - self.narrator_start_time
             progress_percent = min(100, (elapsed / self.narrator_total_duration) * 100)
             
-            small_font = pygame.font.Font(None, 18)
+            small_font = pygame.font.Font(None, 36)  # 2x escalado
             
             # Tiempo transcurrido / total
             time_text = small_font.render(f"⏱️ {elapsed:.1f}s / {self.narrator_total_duration:.1f}s", True, (180, 180, 180))
             time_rect = time_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 65))
             self.screen.blit(time_text, time_rect)
             
-            # Barra de progreso
-            progress_text = small_font.render(f"📊 {progress_percent:.1f}%", True, (180, 180, 180))
-            progress_rect = progress_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 80))
-            self.screen.blit(progress_text, progress_rect)
-            
-            # Fragmento actual
-            fragment_text = small_font.render(f"📖 Fragmento: {self.current_fragment + 1}/{len(self.story_fragments)}", True, (180, 180, 180))
-            self.screen.blit(fragment_text, (indicator_rect.x + 70, indicator_rect.y + 95))
+            # Información simplificada para experiencia final
+            status_text = small_font.render("🎙️ Historia en progreso...", True, (200, 255, 200))
+            status_rect = status_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 80))
+            self.screen.blit(status_text, status_rect)
     
     def draw_menu(self):
         """Dibuja el menú principal"""
@@ -496,50 +494,91 @@ class IntroCinematica:
     
     def draw_character_selection(self):
         """Dibuja la selección de personaje"""
-        # Título
-        title_surface = self.title_font.render("Elige tu personaje", True, self.title_color)
-        title_rect = title_surface.get_rect(center=(self.screen_width//2, 150))
+        # Título principal
+        title_surface = self.title_font.render("Elige tu Héroe", True, self.title_color)
+        title_rect = title_surface.get_rect(center=(self.screen_width//2, 200))
         self.screen.blit(title_surface, title_rect)
         
-        # Opciones de personajes
+        # Subtítulo
+        subtitle_surface = self.text_font.render("Cada personaje tiene habilidades únicas", True, (200, 200, 200))
+        subtitle_rect = subtitle_surface.get_rect(center=(self.screen_width//2, 280))
+        self.screen.blit(subtitle_surface, subtitle_rect)
+        
+        # Opciones de personajes mejoradas
         characters = [
-            {'name': 'juan', 'display': 'JUAN', 'desc': 'Maestro del combate combo'},
-            {'name': 'adan', 'display': 'ADÁN', 'desc': 'Especialista en ataques a distancia'}
+            {
+                'name': 'juan', 
+                'display': 'JUAN',
+                'line1': 'Guerrero Cuerpo a Cuerpo',
+                'line2': 'Fuerte • Resistente • Brutal',
+                'emoji': '⚔️'
+            },
+            {
+                'name': 'adan', 
+                'display': 'ADÁN',
+                'line1': 'Arquero a Distancia',
+                'line2': 'Ágil • Preciso • Letal',
+                'emoji': '🏹'
+            }
         ]
         
+        # Posicionamiento en dos columnas mejorado
+        card_width = 400
+        card_height = 180
+        spacing = 150
+        start_x = (self.screen_width - (2 * card_width + spacing)) // 2
+        card_y = 400
+        
         for i, char in enumerate(characters):
-            x_pos = self.screen_width//2 + (i - 0.5) * 200
-            y_pos = 350
+            x_pos = start_x + (i * (card_width + spacing))
             
-            # Rectángulo del personaje
-            char_rect = pygame.Rect(x_pos - 80, y_pos - 60, 160, 120)
+            # Rectángulo de selección
+            char_rect = pygame.Rect(x_pos, card_y, card_width, card_height)
             
-            if char['name'] == self.selected_character:
-                char_color = (100, 60, 140)
+            # Color según selección
+            is_selected = char['name'] == self.selected_character
+            
+            if is_selected:
+                border_color = (255, 215, 0)  # Dorado
+                bg_color = (100, 60, 20)  # Marrón
                 text_color = self.title_color
             else:
-                char_color = (60, 40, 100)
+                border_color = (120, 120, 120)
+                bg_color = (40, 40, 40)
                 text_color = self.text_color
             
-            # Dibujar selección
-            pygame.draw.rect(self.screen, char_color, char_rect)
-            pygame.draw.rect(self.screen, text_color, char_rect, 3)
+            # Fondo de la carta
+            pygame.draw.rect(self.screen, bg_color, char_rect)
+            pygame.draw.rect(self.screen, border_color, char_rect, 4)
+            
+            # Emoji del personaje
+            emoji_font = pygame.font.Font(None, 80)
+            emoji_surface = emoji_font.render(char['emoji'], True, self.title_color)
+            emoji_rect = emoji_surface.get_rect(center=(char_rect.centerx, char_rect.y + 40))
+            self.screen.blit(emoji_surface, emoji_rect)
             
             # Nombre del personaje
             name_surface = self.button_font.render(char['display'], True, text_color)
-            name_rect = name_surface.get_rect(center=(x_pos, y_pos - 20))
+            name_rect = name_surface.get_rect(center=(char_rect.centerx, char_rect.y + 90))
             self.screen.blit(name_surface, name_rect)
             
-            # Descripción
-            desc_surface = self.text_font.render(char['desc'], True, text_color)
-            desc_rect = desc_surface.get_rect(center=(x_pos, y_pos + 10))
-            self.screen.blit(desc_surface, desc_rect)
+            # Primera línea de descripción
+            line1_surface = self.text_font.render(char['line1'], True, text_color)
+            line1_rect = line1_surface.get_rect(center=(char_rect.centerx, char_rect.y + 125))
+            self.screen.blit(line1_surface, line1_rect)
+            
+            # Segunda línea de descripción
+            small_text_font = pygame.font.Font(None, 48)
+            line2_surface = small_text_font.render(char['line2'], True, (180, 180, 180))
+            line2_rect = line2_surface.get_rect(center=(char_rect.centerx, char_rect.y + 155))
+            self.screen.blit(line2_surface, line2_rect)
         
-        # Instrucciones
-        instructions = ["← → - Cambiar personaje", "ENTER - Comenzar", "ESC - Volver"]
+        # Instrucciones mejoradas
+        instructions_y = 700
+        instructions = ["← → - Cambiar Héroe", "ENTER - Comenzar Aventura", "ESC - Menú Principal"]
         for i, instruction in enumerate(instructions):
-            text_surface = self.text_font.render(instruction, True, (180, 180, 180))
-            text_rect = text_surface.get_rect(center=(self.screen_width//2, 500 + i * 30))
+            text_surface = self.text_font.render(instruction, True, (200, 200, 200))
+            text_rect = text_surface.get_rect(center=(self.screen_width//2, instructions_y + i * 50))
             self.screen.blit(text_surface, text_rect)
     
     def draw(self):

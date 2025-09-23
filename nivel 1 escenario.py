@@ -29,14 +29,16 @@ from audio_manager import get_audio_manager
 from loading_screen import LoadingScreen
 
 class Background:
-    def __init__(self, image_url, width, height):
+    def __init__(self, image_url, width=None, height=None):
+        self.target_width = width
+        self.target_height = height
         self.width = width
         self.height = height
         self.image = None
         self.load_background(image_url)
         
     def load_background(self, url):
-        """Carga la imagen de fondo desde GitHub directamente como los personajes"""
+        """Carga la imagen de fondo desde GitHub y detecta sus dimensiones originales"""
         try:
             print(f"📥 Descargando escenario desde GitHub...")
             response = requests.get(url, timeout=10)
@@ -45,14 +47,29 @@ class Background:
             image_data = BytesIO(response.content)
             pil_image = Image.open(image_data)
             
+            # Obtener dimensiones originales
+            original_width, original_height = pil_image.size
+            print(f"📐 Dimensiones originales de tu PNG: {original_width}x{original_height}")
+            
+            # Si no se especificaron dimensiones, usar las originales
+            if self.target_width is None or self.target_height is None:
+                self.width = original_width
+                self.height = original_height
+                print(f"✅ Usando dimensiones originales: {self.width}x{self.height}")
+            else:
+                self.width = self.target_width
+                self.height = self.target_height
+                print(f"📏 Escalando a: {self.width}x{self.height}")
+            
             # Convertir a superficie de pygame
             image_string = pil_image.convert('RGBA').tobytes()
             self.image = pygame.image.fromstring(image_string, pil_image.size, 'RGBA')
             self.image = self.image.convert_alpha()
             
-            # Escalar al tamaño deseado si es necesario
-            if self.image.get_width() != self.width or self.image.get_height() != self.height:
+            # Escalar solo si es necesario
+            if original_width != self.width or original_height != self.height:
                 self.image = pygame.transform.scale(self.image, (self.width, self.height))
+                print(f"🔄 Imagen escalada de {original_width}x{original_height} a {self.width}x{self.height}")
             
             print(f"✅ Escenario cargado exitosamente: {self.width}x{self.height}")
             
@@ -63,6 +80,11 @@ class Background:
     
     def create_fallback_background(self):
         """Crea un fondo de respaldo visualmente atractivo"""
+        # Si no hay dimensiones definidas, usar pantalla completa
+        if self.width is None or self.height is None:
+            self.width = 1920
+            self.height = 1080
+        
         # Crear superficie base
         self.image = pygame.Surface((self.width, self.height))
         
@@ -106,10 +128,22 @@ class Background:
 class Game:
     def __init__(self, selected_character='juan'):
         pygame.init()
-        self.screen_width = 1000
-        self.screen_height = 700
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        self.screen_width = 1920
+        self.screen_height = 1080
+        
+        # Forzar resolución específica 1920x1080 en pantalla completa
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.FULLSCREEN)
         pygame.display.set_caption("🍎 Nivel 1 - Tierra de las Manzanas - COMBATE")
+        
+        # Verificar resolución real obtenida
+        actual_size = self.screen.get_size()
+        print(f"🖥️ Resolución solicitada: {self.screen_width}x{self.screen_height}")
+        print(f"🖥️ Resolución real: {actual_size[0]}x{actual_size[1]}")
+        
+        # Actualizar dimensiones reales si son diferentes
+        if actual_size != (self.screen_width, self.screen_height):
+            self.screen_width, self.screen_height = actual_size
+            print(f"⚠️ Resolución ajustada por el sistema: {self.screen_width}x{self.screen_height}")
         
         self.clock = pygame.time.Clock()
         self.fps = 60
@@ -136,13 +170,14 @@ class Game:
         self.loading_screen.set_custom_message("Preparando el mundo...")
         self.loading_screen.draw()
         
-        # URLs del escenario desde GitHub
-        escenario_url = "https://github.com/user-attachments/assets/00593769-04d2-4083-a4dc-261e6a3fb3e6"
+        # URLs del escenario desde GitHub - Nivel 1 actualizado (nueva imagen 1920x1080)
+        escenario_url = "https://github.com/user-attachments/assets/03339362-2bb5-4bf7-b4f5-b3ea4babbb92"
         
         # Cargar escenario con progreso
         self.loading_screen.update_progress("Escenario", "Descargando fondo del nivel...")
         self.loading_screen.draw()
-        self.background = Background(escenario_url, 1536, 512)
+        # Usar dimensiones automáticas basadas en la imagen original
+        self.background = Background(escenario_url, None, None)
         
         # Cargar personajes con progreso
         self.loading_screen.update_progress("Juan - Animaciones", "Cargando sprites de Juan...")
@@ -260,7 +295,15 @@ class Game:
                 # Si estamos en game over, no cerrar automáticamente
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    return False
+                    # Alternar entre pantalla completa y ventana
+                    if self.screen.get_flags() & pygame.FULLSCREEN:
+                        self.screen = pygame.display.set_mode((1000, 700))
+                        self.screen_width = 1000
+                        self.screen_height = 700
+                    else:
+                        self.screen = pygame.display.set_mode((1920, 1080), pygame.FULLSCREEN)
+                        self.screen_width = 1920
+                        self.screen_height = 1080
                 elif event.key == pygame.K_TAB and self.switch_cooldown <= 0 and not self.game_over:
                     # Solo permitir cambio si ambos personajes están vivos y no hay game over
                     if self.juan.health > 0 and self.adan.health > 0:
@@ -571,41 +614,41 @@ class Game:
     
     def draw_ui(self):
         """Dibuja la interfaz de usuario"""
-        font = pygame.font.Font(None, 36)
-        font_small = pygame.font.Font(None, 24)
+        font = pygame.font.Font(None, 72)  # Escalado 2x para 1920x1080
+        font_small = pygame.font.Font(None, 48)  # Escalado 2x para 1920x1080
         
-        # Personaje activo
+        # Personaje activo - Escalado para 1920x1080
         active_text = font.render(f"🎮 Jugando: {self.active_character.name}", True, (255, 255, 255))
-        self.screen.blit(active_text, (10, 10))
+        self.screen.blit(active_text, (20, 20))  # Posiciones escaladas 2x
         
         # Estado del personaje inactivo
         if self.inactive_character.health > 0:
             if hasattr(self.inactive_ai, 'current_state'):
                 ai_status = self.inactive_ai.current_state.replace('_', ' ').title()
                 inactive_text = font_small.render(f"🤖 {self.inactive_character.name}: {ai_status}", True, (150, 255, 150))
-                self.screen.blit(inactive_text, (10, 40))
+                self.screen.blit(inactive_text, (20, 80))
         else:
             inactive_text = font_small.render(f"💀 {self.inactive_character.name}: Derribado", True, (255, 100, 100))
-            self.screen.blit(inactive_text, (10, 40))
+            self.screen.blit(inactive_text, (20, 80))
         
         # Vidas de los personajes
         juan_color = (0, 255, 0) if self.juan.health > 30 else (255, 255, 0) if self.juan.health > 0 else (255, 0, 0)
         juan_health_text = font_small.render(f"Juan: {self.juan.health}/100 HP", True, juan_color)
-        self.screen.blit(juan_health_text, (10, 70))
+        self.screen.blit(juan_health_text, (20, 140))
         
         adan_color = (0, 255, 0) if self.adan.health > 30 else (255, 255, 0) if self.adan.health > 0 else (255, 0, 0)
         adan_health_text = font_small.render(f"Adán: {self.adan.health}/100 HP", True, adan_color)
-        self.screen.blit(adan_health_text, (150, 70))
+        self.screen.blit(adan_health_text, (300, 140))
         
         # Progreso
         progress_text = font_small.render(f"Gusanos derrotados: {self.enemies_defeated}/{self.victory_condition}", True, (255, 255, 255))
-        self.screen.blit(progress_text, (10, 95))
+        self.screen.blit(progress_text, (20, 190))
         
         # UI específica del personaje activo
         if self.active_character == self.juan:
             self.juan_attack.draw_ui(self.screen)
         
-        # Controles
+        # Controles - Escalados para pantalla completa
         instructions = [
             "🎮 Controles:",
             "WASD/Flechas - Mover",
@@ -613,16 +656,18 @@ class Game:
             "X - Ataque especial",
             "TAB - Cambiar personaje",
             "E - Revivir compañero (cerca)",
-            "ESC - Salir"
+            "ESC - Salir de pantalla completa"
         ]
         
         for i, instruction in enumerate(instructions):
             text_surface = font_small.render(instruction, True, (255, 255, 255))
-            self.screen.blit(text_surface, (10, self.screen_height - 140 + i * 20))
+            self.screen.blit(text_surface, (20, self.screen_height - 280 + i * 40))  # Escalado 2x
         
-        # Estados especiales
+        # Estados especiales - Escalados para pantalla completa
         if self.game_over:
-            game_over_text = font.render("💀 GAME OVER - Presiona R para reintentar", True, (255, 0, 0))
+            # Fuente más grande para game over
+            big_font = pygame.font.Font(None, 96)
+            game_over_text = big_font.render("💀 GAME OVER - Presiona R para reintentar", True, (255, 0, 0))
             text_rect = game_over_text.get_rect(center=(self.screen_width//2, self.screen_height//2))
             
             # Fondo semi-transparente para el texto
@@ -634,7 +679,8 @@ class Game:
             self.screen.blit(game_over_text, text_rect)
         
         elif self.victory:
-            victory_text = font.render("🏆 ¡VICTORIA! - Presiona R para reiniciar", True, (0, 255, 0))
+            big_font = pygame.font.Font(None, 96)
+            victory_text = big_font.render("🏆 ¡VICTORIA! - Presiona R para reiniciar", True, (0, 255, 0))
             text_rect = victory_text.get_rect(center=(self.screen_width//2, self.screen_height//2))
             self.screen.blit(victory_text, text_rect)
         
@@ -649,7 +695,7 @@ class Game:
         
         debug_text = f"Gusanos: {len(self.worm_spawner.get_worms())} | Juan: {juan_status} | Adán: {adan_status}{ai_info}"
         debug_surface = font_small.render(debug_text, True, (200, 200, 200))
-        self.screen.blit(debug_surface, (300, 70))
+        self.screen.blit(debug_surface, (600, 140))  # Posición escalada
     
     def run(self):
         """Bucle principal del juego"""
