@@ -168,20 +168,25 @@ class JuanAttack:
         base_damage = 15 + (self.combo_count * 5)
         range_multiplier = 1 + (self.combo_count * 0.5)
         
-        # Crear área de ataque direccional CORREGIDA para IA
+        # Crear área de ataque direccional - CORREGIDO PARA AMBOS CASOS
         attack_range = int(70 * range_multiplier)
+        
+        # Para Juan, las direcciones ya vienen invertidas desde handle_attack_input (control manual) 
+        # o desde character_ai.py (control IA), por lo que necesitamos revertir la inversión 
+        # para que el área de ataque coincida con la dirección real del GIF
+        
         if self.attack_direction == "up":
-            # Cuando IA dice "up", debe atacar hacia ARRIBA (enemigo está arriba)
-            attack_rect = pygame.Rect(self.character.x - 20, self.character.y - attack_range, 104, attack_range + 32)
-        elif self.attack_direction == "down":
-            # Cuando IA dice "down", debe atacar hacia ABAJO (enemigo está abajo)
+            # Juan dice "up" -> GIF "up" se reproduce -> área debe ir hacia ABAJO (donde dice el GIF)
             attack_rect = pygame.Rect(self.character.x - 20, self.character.y + 32, 104, attack_range)
+        elif self.attack_direction == "down":
+            # Juan dice "down" -> GIF "down" se reproduce -> área debe ir hacia ARRIBA  
+            attack_rect = pygame.Rect(self.character.x - 20, self.character.y - attack_range, 104, attack_range + 32)
         elif self.attack_direction == "left":
-            # Cuando IA dice "left", debe atacar hacia IZQUIERDA (enemigo está a la izquierda)
-            attack_rect = pygame.Rect(self.character.x - attack_range, self.character.y - 20, attack_range + 32, 104)
-        elif self.attack_direction == "right":
-            # Cuando IA dice "right", debe atacar hacia DERECHA (enemigo está a la derecha)
+            # Juan dice "left" -> GIF "left" se reproduce -> área debe ir hacia DERECHA
             attack_rect = pygame.Rect(self.character.x + 32, self.character.y - 20, attack_range, 104)
+        elif self.attack_direction == "right":
+            # Juan dice "right" -> GIF "right" se reproduce -> área debe ir hacia IZQUIERDA
+            attack_rect = pygame.Rect(self.character.x - attack_range, self.character.y - 20, attack_range + 32, 104)
         else:
             # Ataque circular por defecto
             attack_rect = pygame.Rect(
@@ -210,6 +215,8 @@ class JuanAttack:
                 self.attack_enemies_target.append(enemy)
         
         print(f"🎯 Juan preparando combo x{self.combo_count + 1} hacia {self.attack_direction} ({base_damage} daño pendiente)")
+        print(f"📍 Área de ataque: x={attack_rect.x}, y={attack_rect.y}, w={attack_rect.width}, h={attack_rect.height}")
+        print(f"🎮 Personaje en: x={self.character.x}, y={self.character.y}")
         return len(self.attack_enemies_target) > 0
     
     def apply_pending_damage(self):
