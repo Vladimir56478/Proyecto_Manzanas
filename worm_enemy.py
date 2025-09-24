@@ -17,6 +17,15 @@ class WormEnemy:
         self.attack_cooldown = 1500
         self.last_attack_time = 0
         
+        # Escalado de tamaño (25% más grande)
+        self.scale_factor = 1.25
+        self.width = int(64 * self.scale_factor)
+        self.height = int(64 * self.scale_factor)
+        
+        # Marcador para drops (evitar drops múltiples)
+        self.dropped = False
+        self.alive = True
+        
         # Estados de IA
         self.state = "patrol"  # patrol, chase, attack, hurt
         self.target = None
@@ -80,6 +89,13 @@ class WormEnemy:
                 # Hacer transparente el fondo blanco
                 pygame_surface = pygame_surface.convert_alpha()
                 pygame_surface.set_colorkey((255, 255, 255))
+                
+                # Escalar el frame según el factor de escalado
+                if hasattr(self, 'scale_factor') and self.scale_factor != 1.0:
+                    original_size = pygame_surface.get_size()
+                    new_size = (int(original_size[0] * self.scale_factor), 
+                              int(original_size[1] * self.scale_factor))
+                    pygame_surface = pygame.transform.scale(pygame_surface, new_size)
                 
                 frames.append(pygame_surface)
             
@@ -282,7 +298,7 @@ class WormEnemy:
         
         if self.health <= 0:
             self.alive = False
-            print("💀 Gusano eliminado")
+            print("💀 Gusano eliminado (+drops posibles)")
     
     def update(self, players):
         """Actualiza el gusano"""

@@ -143,9 +143,9 @@ class IntroCinematica:
             # Precargar el audio del narrador unificado pero no reproducirlo aún
             narrator_path = "sounds/music/Audio narrador del juego intro, COMPLETO.mp3"
             pygame.mixer.music.load(narrator_path)
-            print("🎙️ Audio del narrador unificado cargado")
+            print("� Audio de historia cargado")
         except Exception as e:
-            print(f"⚠️ Error cargando narrador: {e}")
+            print(f"⚠️ Error cargando audio: {e}")
     
     def start_narrator(self):
         """Inicia la reproducción del audio del narrador unificado"""
@@ -162,9 +162,9 @@ class IntroCinematica:
                 self.narrator_playing = True
                 self.narrator_start_time = time.time()
                 
-                print("🎙️ Narrador unificado iniciado - Sincronización activada")
+                print("🎙️ Historia iniciada")
         except Exception as e:
-            print(f"⚠️ Error iniciando narrador: {e}")
+            print(f"⚠️ Error reproduciendo audio: {e}")
     
     def stop_narrator(self):
         """Detiene el audio del narrador y restaura la música de fondo"""
@@ -177,9 +177,9 @@ class IntroCinematica:
                 # Restaurar música de fondo
                 audio = get_audio_manager()
                 audio.play_music("Melodia_Interfaz_intro", loop=-1)
-                print("🎙️ Narrador detenido - Música de fondo restaurada")
+                print("🎙️ Historia completada")
         except Exception as e:
-            print(f"⚠️ Error deteniendo narrador: {e}")
+            print(f"⚠️ Error deteniendo audio: {e}")
     
     def is_narrator_playing(self):
         """Verifica si el narrador está reproduciendo"""
@@ -342,7 +342,7 @@ class IntroCinematica:
                 
                 # Verificar si el narrador debería haber terminado según la duración total
                 if elapsed_time >= self.narrator_total_duration:
-                    print(f"⏰ Narrador completado naturalmente en {elapsed_time:.1f}s")
+                    print("✅ Historia completada")
                     self.stop_narrator()
                     self.intro_complete = True
                     self.show_menu = True
@@ -416,47 +416,19 @@ class IntroCinematica:
         #     self.screen.blit(debug_text, (10, self.screen_height - 30))
     
     def draw_narrator_indicator(self):
-        """Dibuja un indicador visual de que el narrador está activo"""
-        # Fondo semi-transparente más grande para más información
-        indicator_rect = pygame.Rect(20, 20, 320, 100)
+        """Dibuja un indicador visual simplificado de la historia"""
+        # Fondo simple y elegante
+        indicator_rect = pygame.Rect(20, 20, 250, 50)
         temp_surface = pygame.Surface((indicator_rect.width, indicator_rect.height), pygame.SRCALPHA)
-        pygame.draw.rect(temp_surface, (0, 0, 0, 150), (0, 0, indicator_rect.width, indicator_rect.height))
-        pygame.draw.rect(temp_surface, (255, 215, 0, 200), (0, 0, indicator_rect.width, indicator_rect.height), 2)
+        pygame.draw.rect(temp_surface, (0, 0, 0, 120), (0, 0, indicator_rect.width, indicator_rect.height))
+        pygame.draw.rect(temp_surface, (255, 215, 0, 180), (0, 0, indicator_rect.width, indicator_rect.height), 2)
         self.screen.blit(temp_surface, indicator_rect.topleft)
         
-        # Icono de micrófono animado
-        mic_center = (indicator_rect.x + 30, indicator_rect.y + 50)
-        pulse = int(10 * abs(math.sin(pygame.time.get_ticks() / 200)))  # Efecto de pulso
-        pygame.draw.circle(self.screen, (255, 215, 0), mic_center, 8 + pulse//2)
-        pygame.draw.circle(self.screen, (255, 255, 255), mic_center, 6)
-        
-        # Texto "NARRADOR"
-        font = pygame.font.Font(None, 48)  # 2x escalado
-        narrator_text = font.render("🎙️ NARRADOR", True, (255, 215, 0))
-        text_rect = narrator_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 25))
-        self.screen.blit(narrator_text, text_rect)
-        
-        # Texto "SINCRONIZADO"
-        sync_text = font.render("SINCRONIZADO", True, (200, 255, 200))
-        sync_rect = sync_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 45))
-        self.screen.blit(sync_text, sync_rect)
-        
-        # Mostrar progreso y tiempo
-        if self.narrator_start_time:
-            elapsed = time.time() - self.narrator_start_time
-            progress_percent = min(100, (elapsed / self.narrator_total_duration) * 100)
-            
-            small_font = pygame.font.Font(None, 36)  # 2x escalado
-            
-            # Tiempo transcurrido / total
-            time_text = small_font.render(f"⏱️ {elapsed:.1f}s / {self.narrator_total_duration:.1f}s", True, (180, 180, 180))
-            time_rect = time_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 65))
-            self.screen.blit(time_text, time_rect)
-            
-            # Información simplificada para experiencia final
-            status_text = small_font.render("🎙️ Historia en progreso...", True, (200, 255, 200))
-            status_rect = status_text.get_rect(center=(indicator_rect.x + 140, indicator_rect.y + 80))
-            self.screen.blit(status_text, status_rect)
+        # Texto simple y limpio
+        font = pygame.font.Font(None, 42)
+        story_text = font.render("📖 Historia en progreso...", True, (255, 255, 255))
+        text_rect = story_text.get_rect(center=(indicator_rect.x + indicator_rect.width//2, indicator_rect.y + indicator_rect.height//2))
+        self.screen.blit(story_text, text_rect)
     
     def draw_menu(self):
         """Dibuja el menú principal"""
@@ -509,15 +481,15 @@ class IntroCinematica:
             {
                 'name': 'juan', 
                 'display': 'JUAN',
-                'line1': 'Guerrero Cuerpo a Cuerpo',
-                'line2': 'Fuerte • Resistente • Brutal',
+                'line1': 'Guerrero a Distancia',
+                'line2': 'Ágil',
                 'emoji': '⚔️'
             },
             {
                 'name': 'adan', 
                 'display': 'ADÁN',
-                'line1': 'Arquero a Distancia',
-                'line2': 'Ágil • Preciso • Letal',
+                'line1': 'Gerrero Cuerpo a Cuerpo',
+                'line2': 'Fuerte',
                 'emoji': '🏹'
             }
         ]
