@@ -26,18 +26,208 @@ from loading_screen import LoadingScreen
 from worm_enemy import WormEnemy, WormSpawner
 
 
+class CollisionBlock:
+    """Bloque invisible de colisión para restringir movimiento"""
+    def __init__(self, x, y, width=32, height=32):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.rect = pygame.Rect(x, y, width, height)
+    
+    def draw_editor(self, screen, camera_x, camera_y):
+        """Dibuja el bloque en modo editor"""
+        screen_x = self.x - camera_x
+        screen_y = self.y - camera_y
+        
+        # Solo dibujar si está visible
+        if (-self.width < screen_x < screen.get_width() + self.width and 
+            -self.height < screen_y < screen.get_height() + self.height):
+            
+            # Bloque semi-transparente rojo
+            block_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            block_surface.fill((255, 0, 0, 128))
+            screen.blit(block_surface, (screen_x, screen_y))
+            
+            # Borde blanco
+            pygame.draw.rect(screen, (255, 255, 255), 
+                           (screen_x, screen_y, self.width, self.height), 2)
+
+
+class CollisionManager:
+    """Maneja las colisiones con bloques invisibles"""
+    def __init__(self, world_width=1980, world_height=1080):
+        self.blocks = []
+        self.editor_mode = False
+        self.block_size = 32
+        self.editor_cursor_x = 100
+        self.editor_cursor_y = 100
+        self.world_width = world_width
+        self.world_height = world_height
+    
+    def add_block(self, x, y):
+        """Añade un bloque de colisión"""
+        # Alinear a la grilla
+        grid_x = (x // self.block_size) * self.block_size
+        grid_y = (y // self.block_size) * self.block_size
+        
+        # Verificar si ya existe un bloque en esa posición
+        for block in self.blocks:
+            if block.x == grid_x and block.y == grid_y:
+                return False
+        
+        self.blocks.append(CollisionBlock(grid_x, grid_y, self.block_size, self.block_size))
+        return True
+    
+    def remove_block(self, x, y):
+        """Remueve un bloque de colisión"""
+        grid_x = (x // self.block_size) * self.block_size
+        grid_y = (y // self.block_size) * self.block_size
+        
+        for block in self.blocks[:]:
+            if block.x == grid_x and block.y == grid_y:
+                self.blocks.remove(block)
+                return True
+        return False
+    
+    def check_collision(self, character_rect):
+        """Verifica colisión con bloques"""
+        for block in self.blocks:
+            if character_rect.colliderect(block.rect):
+                return True
+        return False
+    
+    def can_move_to(self, character, new_x, new_y):
+        """Verifica si un personaje puede moverse a una posición"""
+        # Crear rectángulo temporal en la nueva posición
+        test_rect = pygame.Rect(new_x, new_y, 64, 64)
+        
+        # Verificar colisión con bloques
+        if self.check_collision(test_rect):
+            return False
+        
+        # Verificar límites del mundo
+        if (new_x < 0 or new_x + 64 > self.world_width or 
+            new_y < 0 or new_y + 64 > self.world_height):
+            return False
+        
+        return True
+    
+    def draw_editor_mode(self, screen, camera_x, camera_y):
+        """Dibuja el modo editor"""
+        if not self.editor_mode:
+            return
+        
+        # Dibujar todos los bloques
+        for block in self.blocks:
+            block.draw_editor(screen, camera_x, camera_y)
+        
+        # Dibujar cursor del editor
+        cursor_screen_x = self.editor_cursor_x - camera_x
+        cursor_screen_y = self.editor_cursor_y - camera_y
+        
+        cursor_surface = pygame.Surface((self.block_size, self.block_size), pygame.SRCALPHA)
+        cursor_surface.fill((0, 255, 0, 100))
+        screen.blit(cursor_surface, (cursor_screen_x, cursor_screen_y))
+        pygame.draw.rect(screen, (0, 255, 0), 
+                        (cursor_screen_x, cursor_screen_y, self.block_size, self.block_size), 3)
+        
+        # Información del editor
+        font = pygame.font.Font(None, 48)
+        editor_info = [
+            "🛠️ MODO EDITOR DE COLISIONES",
+            "Flechas: Mover cursor | ESPACIO: Agregar bloque",
+            "BACKSPACE: Eliminar bloque | E: Salir del editor",
+            f"Cursor: ({self.editor_cursor_x}, {self.editor_cursor_y})",
+            f"Bloques totales: {len(self.blocks)}"
+        ]
+        
+        for i, info in enumerate(editor_info):
+            color = (255, 255, 0) if i == 0 else (255, 255, 255)
+            text = font.render(info, True, color)
+            # Fondo semi-transparente para el texto
+            text_bg = pygame.Surface((text.get_width() + 20, text.get_height() + 10), pygame.SRCALPHA)
+            text_bg.fill((0, 0, 0, 180))
+            screen.blit(text_bg, (10, 10 + i * 50))
+            screen.blit(text, (20, 15 + i * 50))
+    
+    def handle_editor_input(self, keys_pressed, keys_just_pressed):
+        """Maneja input del modo editor"""
+        if not self.editor_mode:
+            return
+        
+        move_speed = self.block_size
+        
+        # Mover cursor con flechas
+        if keys_just_pressed.get(pygame.K_LEFT, False):
+            self.editor_cursor_x = max(0, self.editor_cursor_x - move_speed)
+        elif keys_just_pressed.get(pygame.K_RIGHT, False):
+            self.editor_cursor_x = min(self.world_width - self.block_size, self.editor_cursor_x + move_speed)
+        elif keys_just_pressed.get(pygame.K_UP, False):
+            self.editor_cursor_y = max(0, self.editor_cursor_y - move_speed)
+        elif keys_just_pressed.get(pygame.K_DOWN, False):
+            self.editor_cursor_y = min(self.world_height - self.block_size, self.editor_cursor_y + move_speed)
+        
+        # Agregar bloque con ESPACIO
+        if keys_just_pressed.get(pygame.K_SPACE, False):
+            if self.add_block(self.editor_cursor_x, self.editor_cursor_y):
+                print(f"✅ Bloque agregado en ({self.editor_cursor_x}, {self.editor_cursor_y})")
+            else:
+                print(f"⚠️ Ya existe un bloque en esa posición")
+        
+        # Eliminar bloque con BACKSPACE
+        if keys_just_pressed.get(pygame.K_BACKSPACE, False):
+            if self.remove_block(self.editor_cursor_x, self.editor_cursor_y):
+                print(f"🗑️ Bloque eliminado en ({self.editor_cursor_x}, {self.editor_cursor_y})")
+            else:
+                print(f"⚠️ No hay bloque para eliminar en esa posición")
+    
+    def save_collision_data(self, filename="collision_data.txt"):
+        """Guarda los datos de colisión en un archivo"""
+        try:
+            with open(filename, 'w') as f:
+                f.write(f"# Datos de colisión del Nivel 1 - {len(self.blocks)} bloques\n")
+                for block in self.blocks:
+                    f.write(f"{block.x},{block.y},{block.width},{block.height}\n")
+            print(f"💾 Datos de colisión guardados en {filename}")
+        except Exception as e:
+            print(f"❌ Error guardando datos: {e}")
+    
+    def load_collision_data(self, filename="collision_data.txt"):
+        """Carga los datos de colisión desde un archivo"""
+        try:
+            if not os.path.exists(filename):
+                print(f"📁 Archivo {filename} no existe, usando configuración por defecto")
+                return
+            
+            self.blocks.clear()
+            with open(filename, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        parts = line.split(',')
+                        if len(parts) >= 4:
+                            x, y, w, h = map(int, parts[:4])
+                            self.blocks.append(CollisionBlock(x, y, w, h))
+            
+            print(f"📂 Cargados {len(self.blocks)} bloques de colisión desde {filename}")
+        except Exception as e:
+            print(f"❌ Error cargando datos: {e}")
+
+
 class Background:
     """Maneja el fondo del juego con scroll y carga desde GitHub"""
     
-    def __init__(self, image_url, width=None, height=None):
+    def __init__(self, image_url):
         self.image_url = image_url
-        self.width = width or 1980
-        self.height = height or 1080
+        # Dimensiones dinámicas basadas en la imagen original
+        self.width = 1980  # Valor por defecto
+        self.height = 1080  # Valor por defecto  
         self.surface = None
         self.load_background(image_url)
         
     def load_background(self, url):
-        """Carga el fondo desde GitHub"""
+        """Carga el fondo desde GitHub respetando las dimensiones originales"""
         try:
             print("📥 Descargando escenario desde GitHub...")
             response = requests.get(url, timeout=15)
@@ -48,12 +238,12 @@ class Background:
             
             # Información de la imagen original
             original_width, original_height = pil_image.size
-            print(f"📐 Dimensiones originales de tu PNG: {original_width}x{original_height}")
+            print(f"📐 Dimensiones originales del PNG: {original_width}x{original_height}")
             
-            # Usar dimensiones originales
+            # RESPETAR DIMENSIONES ORIGINALES - No redimensionar
             self.width = original_width
             self.height = original_height
-            print(f"✅ Usando dimensiones originales: {self.width}x{self.height}")
+            print(f"✅ Usando dimensiones originales del escenario: {self.width}x{self.height}")
             
             # Convertir a formato pygame
             pil_image = pil_image.convert('RGB')
@@ -62,45 +252,50 @@ class Background:
             self.surface = pygame.image.fromstring(image_data, pil_image.size, 'RGB')
             self.surface = self.surface.convert()
             
-            print(f"✅ Escenario cargado exitosamente: {self.width}x{self.height}")
+            print(f"✅ Escenario cargado exitosamente: 1980x1080")
             
         except Exception as e:
             print(f"❌ Error cargando escenario: {e}")
             self.create_fallback_background()
     
     def create_fallback_background(self):
-        """Crea un fondo de respaldo si falla GitHub"""
-        print("🎨 Creando fondo de respaldo...")
-        self.surface = pygame.Surface((self.width, self.height))
+        """Crea un fondo de respaldo de 1980x1080 si falla GitHub"""
+        print("🎨 Creando fondo de respaldo de 1980x1080...")
+        self.surface = pygame.Surface((1980, 1080))
         
-        # Gradiente verde para simular césped
-        for y in range(self.height):
-            green_intensity = 50 + (y * 100) // self.height
+        # Gradiente verde para simular césped en todo el escenario
+        for y in range(1080):
+            green_intensity = 50 + (y * 100) // 1080
             color = (20, min(green_intensity, 150), 20)
-            pygame.draw.line(self.surface, color, (0, y), (self.width, y))
+            pygame.draw.line(self.surface, color, (0, y), (1980, y))
         
-        # Añadir algunos elementos decorativos
-        for _ in range(50):
-            x = random.randint(0, self.width)
-            y = random.randint(0, self.height)
+        # Añadir elementos decorativos distribuidos en el escenario largo
+        for _ in range(150):  # Más elementos para el escenario más largo
+            x = random.randint(0, 1980)
+            y = random.randint(0, 1080)
             size = random.randint(10, 30)
             color = (30, random.randint(80, 120), 30)
             pygame.draw.circle(self.surface, color, (x, y), size)
     
     def draw(self, screen, camera_x, camera_y, screen_width, screen_height):
-        """Dibuja el fondo con soporte para scroll de cámara"""
+        """Dibuja el fondo con scroll completo respetando dimensiones originales"""
         if not self.surface:
             return
             
-        # Calcular la región visible
-        visible_rect = pygame.Rect(camera_x, camera_y, screen_width, screen_height)
+        # Limitar cámara a los bounds del escenario (dimensiones reales)
+        # Permitir scroll completo en ambas direcciones si el escenario es más grande
+        max_camera_x = max(0, self.width - screen_width)
+        max_camera_y = max(0, self.height - screen_height)
         
-        # Limitar camera a los bounds del mundo
-        camera_x = max(0, min(camera_x, self.width - screen_width))
-        camera_y = max(0, min(camera_y, self.height - screen_height))
+        camera_x = max(0, min(camera_x, max_camera_x))
+        camera_y = max(0, min(camera_y, max_camera_y))
         
-        # Dibujar la porción visible
-        source_rect = pygame.Rect(camera_x, camera_y, screen_width, screen_height)
+        # Calcular región visible del escenario
+        visible_width = min(screen_width, self.width - camera_x)
+        visible_height = min(screen_height, self.height - camera_y)
+        
+        # Dibujar la porción visible del escenario
+        source_rect = pygame.Rect(camera_x, camera_y, visible_width, visible_height)
         screen.blit(self.surface, (0, 0), source_rect)
 
 
@@ -142,38 +337,39 @@ class Game:
         self.loading_screen.update_progress("Escenario", "Descargando desde GitHub...")
         self.loading_screen.draw()
         
-        # URLs de GitHub para imágenes
-        self.github_urls = {
-            'escenario_principal': "https://github.com/user-attachments/assets/03339362-2bb5-4bf7-b4f5-b3ea4babbb92",
-            'imagen_adicional': "https://github.com/user-attachments/assets/0575a74a-96b6-4c69-b052-ad187ee067d4"
-        }
+        # URL del escenario principal (PNG largo)
+        escenario_url = "https://github.com/user-attachments/assets/0575a74a-96b6-4c69-b052-ad187ee067d4"
         
-        self.background = Background(self.github_urls['escenario_principal'])
+        # Cargar solo el escenario principal
+        self.background = Background(escenario_url)
         
-        # Cargar imagen adicional usando el mismo sistema
-        self.loading_screen.update_progress("Escenario", "Cargando imagen adicional...")
-        self.loading_screen.draw()
-        self.additional_image = self.load_github_image(self.github_urls['imagen_adicional'])
-        self.world_width = self.background.width
-        self.world_height = self.background.height
+        # Configurar mundo con dimensiones dinámicas del escenario cargado
+        self.world_width = self.background.width  # Ancho real del escenario
+        self.world_height = self.background.height  # Alto real del escenario
+        
+        print(f"🗺️ Mundo configurado: {self.world_width}x{self.world_height}")
         
         # === CARGA DE PERSONAJES ===
         self.loading_screen.update_progress("Personajes", "Cargando Juan...")
         self.loading_screen.draw()
         
         self.juan = JuanCharacter(400, 300)
-        self.juan.max_health = 100
-        self.juan.health = 100
-        self.juan.speed = 4
+        self.juan.max_health = 120  # Aumento de vida
+        self.juan.health = 120
+        self.juan.speed = 5  # Velocidad mejorada
+        self.juan.damage = 25  # Daño base
+        self.juan.attack_speed = 1.0  # Velocidad de ataque
         self.juan.name = "Juan"
         
         self.loading_screen.update_progress("Personajes", "Cargando Adán...")
         self.loading_screen.draw()
         
         self.adan = AdanCharacter(500, 300)
-        self.adan.max_health = 100
-        self.adan.health = 100
-        self.adan.speed = 4
+        self.adan.max_health = 110  # Vida balanceada
+        self.adan.health = 110
+        self.adan.speed = 6  # Más velocidad que Juan
+        self.adan.damage = 30  # Más daño que Juan
+        self.adan.attack_speed = 0.8  # Ataques más rápidos
         self.adan.name = "Adán"
         
         # === SISTEMAS DE ATAQUE ===
@@ -207,6 +403,10 @@ class Game:
         self.loading_screen.draw()
         
         self.inactive_ai = CharacterAI(self.inactive_character, self.active_character)
+        # CONFIGURACIÓN EXACTA DEL NIVEL 2 - Mejorar la IA para ser más agresiva
+        self.inactive_ai.detection_range = 400  # Igual que nivel 2
+        self.inactive_ai.attack_range = 150     # Igual que nivel 2
+        print(f"🤖 IA mejorada para {self.inactive_character.name}: Detección={self.inactive_ai.detection_range}px, Ataque={self.inactive_ai.attack_range}px")
         
         self.loading_screen.update_progress("Audio", "Cargando sonidos...")
         self.loading_screen.draw()
@@ -238,6 +438,24 @@ class Game:
         self.camera_y = 0
         self.switch_cooldown = 0
         
+        # === SISTEMA DE COLISIONES Y EDITOR ===
+        self.collision_manager = CollisionManager(self.world_width, self.world_height)
+        self.collision_manager.load_collision_data()  # Cargar colisiones guardadas
+        
+        # Si no hay datos guardados, empezar con escenario limpio
+        if len(self.collision_manager.blocks) == 0:
+            print("📋 Escenario sin obstáculos - Usa F1 para crear colisiones personalizadas")
+            print("🛠️ CONTROLES DEL EDITOR:")
+            print("   F1: Activar/Desactivar modo editor")
+            print("   Flechas: Mover cursor")
+            print("   Espacio: Colocar bloque invisible")  
+            print("   Backspace: Eliminar bloque invisible")
+            print("   Los bloques se guardan automáticamente al salir del editor")
+        
+        # Inicializar keys_last_frame como lista
+        temp_keys = pygame.key.get_pressed()
+        self.keys_last_frame = list(temp_keys)
+        
         # === CREAR IMÁGENES DE COLECCIONABLES ===
         self.create_collectible_images()
         
@@ -247,43 +465,6 @@ class Game:
         pygame.time.wait(1000)
         
         print("✅ Nivel 1 inicializado correctamente")
-    
-    def load_github_image(self, url):
-        """Carga una imagen desde GitHub siguiendo el mismo procedimiento que Background"""
-        try:
-            print(f"📥 Descargando imagen desde GitHub: {url}")
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            
-            image_data = BytesIO(response.content)
-            pil_image = Image.open(image_data)
-            
-            # Información de la imagen original
-            original_width, original_height = pil_image.size
-            print(f"📐 Dimensiones de la imagen: {original_width}x{original_height}")
-            
-            # Convertir a formato pygame
-            pil_image = pil_image.convert('RGBA')  # Usar RGBA para soporte de transparencia
-            image_data = pil_image.tobytes()
-            
-            pygame_surface = pygame.image.fromstring(image_data, pil_image.size, 'RGBA')
-            pygame_surface = pygame_surface.convert_alpha()
-            
-            print(f"✅ Imagen cargada exitosamente: {original_width}x{original_height}")
-            return pygame_surface
-            
-        except Exception as e:
-            print(f"❌ Error cargando imagen desde GitHub: {e}")
-            # Crear imagen de fallback
-            fallback_surface = pygame.Surface((64, 64), pygame.SRCALPHA)
-            fallback_surface.fill((255, 0, 255, 128))  # Magenta semi-transparente
-            pygame.draw.rect(fallback_surface, (255, 255, 255), (0, 0, 64, 64), 2)
-            font = pygame.font.Font(None, 24)
-            text = font.render("IMG", True, (255, 255, 255))
-            text_rect = text.get_rect(center=(32, 32))
-            fallback_surface.blit(text, text_rect)
-            print("🎨 Usando imagen de respaldo")
-            return fallback_surface
     
     def setup_enemy_spawns(self):
         """Configura 6 áreas de spawn para los 15 gusanos"""
@@ -301,21 +482,26 @@ class Game:
         
         print("✅ 6 áreas de spawn configuradas para 15 gusanos")
     
+
     def create_collectible_images(self):
-        """Crea sprites para manzanas y pociones"""
-        # Manzana
-        self.apple_image = pygame.Surface((32, 32), pygame.SRCALPHA)
-        pygame.draw.circle(self.apple_image, (220, 50, 50), (16, 18), 12)
-        pygame.draw.circle(self.apple_image, (255, 100, 100), (12, 14), 8)
-        pygame.draw.rect(self.apple_image, (139, 69, 19), (14, 4, 4, 8))
-        pygame.draw.ellipse(self.apple_image, (34, 139, 34), (10, 2, 8, 6))
+        """Crea sprites mejorados para manzanas y pociones"""
+        # Manzana más grande y visible
+        self.apple_image = pygame.Surface((40, 40), pygame.SRCALPHA)
+        pygame.draw.circle(self.apple_image, (220, 50, 50), (20, 22), 16)  # Más grande
+        pygame.draw.circle(self.apple_image, (255, 100, 100), (16, 18), 12)
+        pygame.draw.rect(self.apple_image, (139, 69, 19), (18, 6, 6, 12))
+        pygame.draw.ellipse(self.apple_image, (34, 139, 34), (14, 4, 12, 8))
+        # Brillo para más visibilidad
+        pygame.draw.circle(self.apple_image, (255, 200, 200, 80), (15, 15), 8)
         
-        # Poción
-        self.potion_image = pygame.Surface((32, 32), pygame.SRCALPHA)
-        pygame.draw.rect(self.potion_image, (100, 100, 100), (12, 14, 8, 14))
-        pygame.draw.ellipse(self.potion_image, (20, 100, 220), (10, 18, 12, 10))
-        pygame.draw.rect(self.potion_image, (50, 150, 255), (14, 10, 4, 12))
-        pygame.draw.circle(self.potion_image, (100, 200, 255), (16, 22), 4)
+        # Poción más grande y visible  
+        self.potion_image = pygame.Surface((40, 40), pygame.SRCALPHA)
+        pygame.draw.rect(self.potion_image, (100, 100, 100), (16, 18, 8, 16))
+        pygame.draw.ellipse(self.potion_image, (20, 100, 220), (14, 22, 12, 12))
+        pygame.draw.rect(self.potion_image, (50, 150, 255), (18, 14, 4, 14))
+        pygame.draw.circle(self.potion_image, (100, 200, 255), (20, 26), 5)
+        # Efecto de brillo
+        pygame.draw.circle(self.potion_image, (150, 220, 255, 60), (20, 26), 10)
     
     # === MANEJO DE EVENTOS ===
     
@@ -323,12 +509,27 @@ class Game:
         """Maneja todos los eventos del juego"""
         keys_pressed = pygame.key.get_pressed()
         
+        # Detectar teclas presionadas este frame
+        keys_just_pressed = {}
+        for key in range(512):  # Cubrir todas las teclas
+            keys_just_pressed[key] = keys_pressed[key] and not self.keys_last_frame[key]
+        
+        # Convertir a lista para poder usar copy()
+        self.keys_last_frame = list(keys_pressed)
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
+                elif event.key == pygame.K_F1:
+                    # Toggle modo editor
+                    self.collision_manager.editor_mode = not self.collision_manager.editor_mode
+                    mode = "activado" if self.collision_manager.editor_mode else "desactivado"
+                    print(f"🛠️ Modo editor {mode}")
+                    if not self.collision_manager.editor_mode:
+                        self.collision_manager.save_collision_data()
                 elif event.key == pygame.K_r and (self.game_over or self.victory):
                     self.restart_game()
                 elif event.key == pygame.K_n and self.victory:
@@ -336,15 +537,21 @@ class Game:
                     print("🌟 Iniciando transición al Nivel 2...")
                     self.launch_level_2()
                     return False
-                elif event.key == pygame.K_TAB:
+                elif event.key == pygame.K_TAB and not self.collision_manager.editor_mode:
                     self.switch_character()
-                elif event.key == pygame.K_x:
+                elif event.key == pygame.K_x and not self.collision_manager.editor_mode:
                     self.perform_special_attack()
                 elif self.show_upgrade_menu and event.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
                     self.handle_upgrade_selection(event.key)
                     self.show_upgrade_menu = False
         
-        # Manejo de revivir con E
+        # Manejo del modo editor
+        if self.collision_manager.editor_mode:
+            self.collision_manager.handle_editor_input(keys_pressed, keys_just_pressed)
+            # En modo editor, no procesar otros inputs
+            return True
+        
+        # Manejo de revivir con E (solo si no está en modo editor)
         e_key_pressed = keys_pressed[pygame.K_e]
         if not self.game_over and self.inactive_character.health <= 0:
             distance = self.distance_between_characters()
@@ -361,19 +568,27 @@ class Game:
         
         self.revival_key_pressed = e_key_pressed
         
-        # Manejo de ataques básicos con ESPACIO
+        # Manejo de ataques básicos con ESPACIO (solo si no está en modo editor)
         if keys_pressed[pygame.K_SPACE]:
             self.perform_basic_attack()
         
         return True
     
     def switch_character(self):
-        """Cambia entre Juan y Adán"""
+        """Cambia entre Juan y Adán manteniendo configuración avanzada de IA"""
         if self.switch_cooldown <= 0 and not self.game_over and not self.victory:
+            # Cambiar personajes
             self.active_character, self.inactive_character = self.inactive_character, self.active_character
             self.active_attack_system, self.inactive_attack_system = self.inactive_attack_system, self.active_attack_system
+            
+            # Reconfigurar IA con parámetros mejorados
+            self.inactive_ai = CharacterAI(self.inactive_character, self.active_character)
+            # CONFIGURACIÓN EXACTA DEL NIVEL 2
+            self.inactive_ai.detection_range = 400
+            self.inactive_ai.attack_range = 150
+            
             self.switch_cooldown = 30
-            print(f"🔄 Cambiado a {self.active_character.name}")
+            print(f"🔄 Cambiado a {self.active_character.name} - IA configurada para {self.inactive_character.name}")
     
     def perform_basic_attack(self):
         """Realiza ataque básico"""
@@ -416,20 +631,83 @@ class Game:
         
         keys_pressed = pygame.key.get_pressed()
         
-        # Actualizar personaje activo
-        if not self.active_attack_system.is_character_attacking():
+        # Actualizar personaje activo con sistema de colisiones
+        if not self.active_attack_system.is_character_attacking() and not self.collision_manager.editor_mode:
+            old_x, old_y = self.active_character.x, self.active_character.y
             self.active_character.update(keys_pressed)
+            
+            # Verificar colisiones y revertir movimiento si es necesario
+            if not self.collision_manager.can_move_to(self.active_character, 
+                                                     self.active_character.x, 
+                                                     self.active_character.y):
+                self.active_character.x, self.active_character.y = old_x, old_y
+            
             self.enforce_boundaries(self.active_character)
         
-        # Actualizar IA del personaje inactivo
-        if self.inactive_character.health > 0 or self.inactive_ai.is_being_revived:
+        # Actualizar IA del personaje inactivo - SISTEMA DEL NIVEL 2 EXACTO
+        if (self.inactive_character.health > 0 or self.inactive_ai.is_being_revived) and not self.collision_manager.editor_mode:
+            old_x, old_y = self.inactive_character.x, self.inactive_character.y
+            
+            # Obtener enemigos para la IA (gusanos en nivel 1, chamán en nivel 2)
             worms = self.worm_spawner.get_worms()
-            self.inactive_ai.detection_range = 300
+            
+            # EXACTAMENTE COMO EN NIVEL 2: La IA se enfoca en los enemigos
             self.inactive_ai.update(worms)
+            
+            # EXACTAMENTE COMO EN NIVEL 2: Obtener estado de animación y actualizar personaje
+            ai_animation_state = self.inactive_ai.get_animation_state()
+            self.inactive_character.update(keys_pressed=None, ai_controlled=True, ai_direction=ai_animation_state)
+            
+            # Verificar colisiones para IA
+            if not self.collision_manager.can_move_to(self.inactive_character,
+                                                     self.inactive_character.x,
+                                                     self.inactive_character.y):
+                self.inactive_character.x, self.inactive_character.y = old_x, old_y
+            
+            # Aplicar límites del mundo (igual que en nivel 2)
             self.enforce_boundaries(self.inactive_character)
         
-        # Actualizar sistemas de ataque
+        # EXACTAMENTE COMO EN NIVEL 2: Manejar ataques del personaje activo
         worms = self.worm_spawner.get_worms()
+        self.active_attack_system.handle_attack_input(keys_pressed, worms)
+        
+        # SISTEMA DE ATAQUES AUTOMÁTICOS DE IA MEJORADO
+        # Solo activar ataques si la IA está realmente en estado de ataque y tiene objetivo
+        if (hasattr(self.inactive_ai, 'current_state') and 
+            self.inactive_ai.current_state == 'attack' and 
+            hasattr(self.inactive_ai, 'current_target') and
+            self.inactive_ai.current_target and
+            hasattr(self.inactive_ai.current_target, 'alive') and
+            self.inactive_ai.current_target.alive):
+            
+            # Verificar que realmente está en rango de ataque
+            target_distance = math.sqrt(
+                (self.inactive_ai.current_target.x - self.inactive_character.x)**2 + 
+                (self.inactive_ai.current_target.y - self.inactive_character.y)**2
+            )
+            
+            if target_distance <= self.inactive_ai.attack_range:
+                # La IA está en rango - activar ataque automático
+                fake_keys_dict = {
+                    pygame.K_SPACE: True,  # Solo activar SPACE
+                    pygame.K_UP: False, pygame.K_DOWN: False,
+                    pygame.K_LEFT: False, pygame.K_RIGHT: False,
+                    pygame.K_w: False, pygame.K_s: False,
+                    pygame.K_a: False, pygame.K_d: False
+                }
+                
+                class FakeKeys:
+                    def __getitem__(self, key):
+                        return fake_keys_dict.get(key, False)
+                        
+                if self.inactive_character == self.juan:
+                    self.juan_attack.handle_attack_input(FakeKeys(), worms)
+                    print(f"🎯 Juan (IA) ejecutando ataque automático contra enemigo a {int(target_distance)}px")
+                else:
+                    self.adan_attack.handle_attack_input(FakeKeys(), worms)
+                    print(f"🔥 Adán (IA) ejecutando ataque automático contra enemigo a {int(target_distance)}px")
+        
+        # Actualizar sistemas de ataque
         self.juan_attack.update(worms)
         self.adan_attack.update(worms)
         
@@ -560,17 +838,21 @@ class Game:
                     print(f"🛡️ Escudo de {character.name} terminado")
     
     def update_camera(self):
-        """Actualiza la posición de la cámara"""
+        """Actualiza la posición de la cámara para seguir al personaje en el escenario completo"""
+        # Centrar cámara en el personaje activo
         target_x = self.active_character.x - self.screen_width // 2
         target_y = self.active_character.y - self.screen_height // 2
         
-        # Suavizar movimiento de cámara
-        self.camera_x += (target_x - self.camera_x) * 0.1
-        self.camera_y += (target_y - self.camera_y) * 0.1
+        # Suavizar movimiento de cámara (más rápido para mejor respuesta)
+        self.camera_x += (target_x - self.camera_x) * 0.15
+        self.camera_y += (target_y - self.camera_y) * 0.15
         
-        # Limitar cámara a bounds del mundo
-        self.camera_x = max(0, min(self.camera_x, self.world_width - self.screen_width))
-        self.camera_y = max(0, min(self.camera_y, self.world_height - self.screen_height))
+        # Limitar cámara a bounds del escenario con dimensiones reales
+        max_camera_x = max(0, self.world_width - self.screen_width)
+        max_camera_y = max(0, self.world_height - self.screen_height)
+        
+        self.camera_x = max(0, min(self.camera_x, max_camera_x))
+        self.camera_y = max(0, min(self.camera_y, max_camera_y))
     
     def check_game_conditions(self):
         """Verifica condiciones de victoria y derrota"""
@@ -634,10 +916,23 @@ class Game:
     # === UTILIDADES ===
     
     def enforce_boundaries(self, character):
-        """Aplica límites del mapa"""
-        margin = 50
-        character.x = max(margin, min(self.world_width - margin - 64, character.x))
-        character.y = max(margin, min(self.world_height - margin - 64, character.y))
+        """Aplica límites exactos del escenario con dimensiones originales"""
+        # Límites dinámicos basados en el tamaño real del escenario
+        left_limit = 0
+        right_limit = self.world_width - 64  # Ancho del personaje
+        top_limit = 0
+        bottom_limit = self.world_height - 64  # Alto del personaje
+        
+        # Aplicar límites con rebote suave
+        if character.x < left_limit:
+            character.x = left_limit
+        elif character.x > right_limit:
+            character.x = right_limit
+            
+        if character.y < top_limit:
+            character.y = top_limit
+        elif character.y > bottom_limit:
+            character.y = bottom_limit
     
     def restart_game(self):
         """Reinicia el juego"""
@@ -693,22 +988,31 @@ class Game:
         # Limpiar pantalla
         self.screen.fill((50, 100, 50))
         
-        # Dibujar fondo
+        # Dibujar fondo (escenario principal PNG 1980x1080)
         self.background.draw(self.screen, self.camera_x, self.camera_y, 
                            self.screen_width, self.screen_height)
         
-        # Dibujar imagen adicional (puede ser decorativa, objeto, etc.)
-        self.draw_additional_image()
-        
-        # Dibujar personajes
+        # EXACTAMENTE COMO EN NIVEL 2: Dibujar personajes (inactivo primero para orden de capas)
         if self.inactive_character.health > 0:
             if not self.inactive_attack_system.is_character_attacking():
                 self.inactive_character.draw(self.screen, self.camera_x, self.camera_y)
+                # Efecto de escudo si está activo
+                if hasattr(self.inactive_character, 'shield_active') and self.inactive_character.shield_active:
+                    self.draw_shield_effect(self.inactive_character)
         
+        # EXACTAMENTE COMO EN NIVEL 2: Personaje activo
         if not self.active_attack_system.is_character_attacking():
             self.active_character.draw(self.screen, self.camera_x, self.camera_y)
+            # Efecto de escudo si está activo
+            if hasattr(self.active_character, 'shield_active') and self.active_character.shield_active:
+                self.draw_shield_effect(self.active_character)
         
-        # Dibujar efectos de ataque
+        # Mostrar indicador de combate de IA (exacto como nivel 2)
+        if (hasattr(self.inactive_ai, 'current_state') and 
+            self.inactive_ai.current_state == 'attack'):
+            self.draw_ai_combat_indicator()
+        
+        # EXACTAMENTE COMO EN NIVEL 2: Dibujar efectos de ataque
         self.juan_attack.draw(self.screen, self.camera_x, self.camera_y)
         self.adan_attack.draw(self.screen, self.camera_x, self.camera_y)
         
@@ -720,6 +1024,10 @@ class Game:
         
         # Dibujar UI
         self.draw_ui()
+        
+        # Dibujar modo editor si está activo
+        if self.collision_manager.editor_mode:
+            self.collision_manager.draw_editor_mode(self.screen, self.camera_x, self.camera_y)
         
         # Menú de mejoras
         if self.show_upgrade_menu:
@@ -742,27 +1050,46 @@ class Game:
         
         pygame.display.flip()
     
-    def draw_additional_image(self):
-        """Dibuja la imagen adicional cargada desde GitHub"""
-        if hasattr(self, 'additional_image') and self.additional_image:
-            # Posición donde dibujar la imagen (puedes ajustar según necesidades)
-            # Por ejemplo, como objeto decorativo en el mundo
-            world_x = 200  # Posición X en el mundo
-            world_y = 200  # Posición Y en el mundo
+    def draw_ai_combat_indicator(self):
+        """Dibuja indicador visual cuando la IA está en combate"""
+        if not hasattr(self, 'inactive_ai'):
+            return
             
-            # Convertir a coordenadas de pantalla
-            screen_x = world_x - self.camera_x
-            screen_y = world_y - self.camera_y
+        # Dibujar indicador de combate sobre el personaje IA
+        indicator_x = int(self.inactive_character.x - self.camera_x + 32)
+        indicator_y = int(self.inactive_character.y - self.camera_y - 20)
+        
+        # Círculo pulsante rojo
+        pulse = 1 + 0.5 * math.sin(pygame.time.get_ticks() * 0.01)
+        radius = int(8 * pulse)
+        pygame.draw.circle(self.screen, (255, 0, 0), (indicator_x, indicator_y), radius)
+        pygame.draw.circle(self.screen, (255, 100, 100), (indicator_x, indicator_y), max(1, radius-2))
+        
+        # Texto "IA"
+        font = pygame.font.Font(None, 24)
+        ai_text = font.render("IA", True, (255, 255, 255))
+        ai_rect = ai_text.get_rect(center=(indicator_x, indicator_y-25))
+        self.screen.blit(ai_text, ai_rect)
+    
+    def draw_shield_effect(self, character):
+        """Dibuja efecto visual de escudo mejorado"""
+        if not hasattr(character, 'shield_active') or not character.shield_active:
+            return
             
-            # Solo dibujar si está visible en pantalla
-            image_rect = self.additional_image.get_rect()
-            if (-image_rect.width < screen_x < self.screen_width and 
-                -image_rect.height < screen_y < self.screen_height):
-                
-                # Escalar la imagen si es necesario (opcional)
-                # scaled_image = pygame.transform.scale(self.additional_image, (64, 64))
-                
-                self.screen.blit(self.additional_image, (screen_x, screen_y))
+        # Círculo pulsante alrededor del personaje
+        shield_alpha = int(100 + 50 * math.sin(pygame.time.get_ticks() * 0.01))
+        shield_surface = pygame.Surface((80, 80), pygame.SRCALPHA)
+        
+        # Efecto de escudo con múltiples capas
+        pygame.draw.circle(shield_surface, (0, 150, 255, shield_alpha//2), (40, 40), 35)
+        pygame.draw.circle(shield_surface, (100, 200, 255, shield_alpha), (40, 40), 30)
+        pygame.draw.circle(shield_surface, (150, 220, 255, shield_alpha//3), (40, 40), 25)
+        
+        shield_x = character.x - self.camera_x - 8
+        shield_y = character.y - self.camera_y - 8
+        self.screen.blit(shield_surface, (shield_x, shield_y))
+    
+
     
     def draw_collectibles(self):
         """Dibuja manzanas y pociones"""
@@ -789,27 +1116,44 @@ class Game:
                 self.screen.blit(temp_surface, (screen_x, screen_y))
     
     def draw_ui(self):
-        """Dibuja interfaz de usuario"""
+        """Dibuja interfaz de usuario mejorada"""
         font = pygame.font.Font(None, 72)
         font_small = pygame.font.Font(None, 48)
+        font_large = pygame.font.Font(None, 96)  # Para contador de enemigos
         
-        # Personaje activo
+        # Personaje activo con icono
         active_text = font.render(f"🎮 {self.active_character.name}", True, (255, 255, 255))
         self.screen.blit(active_text, (20, 20))
         
-        # Vidas
-        juan_health = font_small.render(f"Juan: {self.juan.health}/{self.juan.max_health}", 
+        # Vidas con barras gráficas
+        juan_health_text = font_small.render(f"Juan: {self.juan.health}/{self.juan.max_health}", 
                                        True, (255, 255, 255) if self.juan.health > 0 else (255, 100, 100))
-        self.screen.blit(juan_health, (20, 90))
+        self.screen.blit(juan_health_text, (20, 90))
         
-        adan_health = font_small.render(f"Adán: {self.adan.health}/{self.adan.max_health}", 
+        adan_health_text = font_small.render(f"Adán: {self.adan.health}/{self.adan.max_health}", 
                                        True, (255, 255, 255) if self.adan.health > 0 else (255, 100, 100))
-        self.screen.blit(adan_health, (300, 90))
+        self.screen.blit(adan_health_text, (300, 90))
         
-        # Progreso
-        progress_text = font_small.render(f"Gusanos: {self.enemies_defeated}/{self.victory_condition}", 
-                                        True, (255, 255, 255))
-        self.screen.blit(progress_text, (20, 140))
+        # CONTADOR DE ENEMIGOS PROMINENTE
+        # Fondo para el contador
+        counter_bg = pygame.Surface((400, 80), pygame.SRCALPHA)
+        counter_bg.fill((0, 0, 0, 180))
+        self.screen.blit(counter_bg, (self.screen_width - 420, 20))
+        
+        # Texto del contador con colores dinámicos
+        progress_color = (255, 255, 255)
+        if self.enemies_defeated >= self.victory_condition:
+            progress_color = (100, 255, 100)  # Verde cuando se completa
+        elif self.enemies_defeated >= self.victory_condition * 0.75:
+            progress_color = (255, 255, 100)  # Amarillo cuando está cerca
+        
+        progress_text = font_large.render(f"🐛 {self.enemies_defeated}/{self.victory_condition}", 
+                                        True, progress_color)
+        self.screen.blit(progress_text, (self.screen_width - 400, 30))
+        
+        # Texto descriptivo
+        desc_text = font_small.render("Gusanos Derrotados", True, (200, 200, 200))
+        self.screen.blit(desc_text, (self.screen_width - 380, 70))
         
         # Mejoras
         upgrades_text = [
@@ -822,6 +1166,14 @@ class Game:
         for i, upgrade in enumerate(upgrades_text):
             upgrade_surface = font_small.render(upgrade, True, (200, 255, 200))
             self.screen.blit(upgrade_surface, (20, 190 + i * 35))
+        
+        # Indicador de modo editor
+        if self.collision_manager.editor_mode:
+            editor_text = font_small.render("🛠️ MODO EDITOR ACTIVO (F1 para salir)", True, (255, 255, 0))
+            self.screen.blit(editor_text, (20, 330))
+        else:
+            editor_text = font_small.render("F1 - Activar Modo Editor", True, (200, 200, 200))
+            self.screen.blit(editor_text, (20, 330))
         
         # Indicador de escudo
         for i, char in enumerate([self.juan, self.adan]):
@@ -875,7 +1227,7 @@ class Game:
         if not self.inactive_ai.is_being_revived:
             return
         
-        progress = self.inactive_ai.revival_progress / self.inactive_ai.revival_duration
+        progress = self.inactive_ai.revival_timer / self.inactive_ai.revival_time
         
         # Barra de progreso
         bar_width = 300

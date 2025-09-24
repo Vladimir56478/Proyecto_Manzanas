@@ -215,10 +215,10 @@ class ChamanMalvado:
             self.moving = False
     
     def magic_attack(self, target_player):
-        """Ataque mágico mejorado del Chamán"""
+        """Ataque mágico mejorado del Chamán con animaciones GIF"""
         print("🔮 ¡Chamán lanza ataque mágico devastador!")
         
-        # Iniciar animación de ataque
+        # INICIAR ANIMACIÓN DE ATAQUE GIF
         self.attacking = True
         self.attack_animation_frame = 0
         
@@ -230,6 +230,8 @@ class ChamanMalvado:
             self.current_direction = "right" if dx > 0 else "left"
         else:
             self.current_direction = "down" if dy > 0 else "up"
+        
+        print(f"🎬 Reproduciendo GIF de ataque: {self.current_direction}")
         
         # Crear múltiples proyectiles mágicos (ataque más poderoso)
         base_damage = self.magic_power
@@ -251,7 +253,7 @@ class ChamanMalvado:
                 final_dx = norm_dx * cos_offset - norm_dy * sin_offset
                 final_dy = norm_dx * sin_offset + norm_dy * cos_offset
                 
-                # Crear proyectil
+                # Crear proyectil con efectos visuales mejorados
                 projectile = {
                     'x': self.x + 40,  # Centro del chamán
                     'y': self.y + 40,
@@ -260,10 +262,14 @@ class ChamanMalvado:
                     'damage': base_damage + random.randint(-5, 5),
                     'lifetime': 4000,  # 4 segundos
                     'start_time': pygame.time.get_ticks(),
-                    'type': 'magic'
+                    'type': 'magic',
+                    'color': (random.randint(100, 255), random.randint(50, 150), random.randint(200, 255)),  # Color mágico
+                    'size': random.randint(8, 15)  # Tamaño variable
                 }
                 
                 self.projectiles.append(projectile)
+        
+        print(f"✨ Lanzados {len([p for p in self.projectiles if p['type'] == 'magic'])} proyectiles mágicos")
     
     def summon_worms(self, enemy_list, target_player):
         """Invoca gusanos cerca del jugador"""
@@ -293,25 +299,36 @@ class ChamanMalvado:
         print(f"👹 Chamán invocó {num_worms} criaturas malévolas")
     
     def update_animations(self):
-        """Actualiza las animaciones del Chamán"""
+        """Actualiza las animaciones del Chamán con control de GIFs"""
         if self.attacking:
-            # Animación de ataque
+            # Animación de ataque - Reproducir GIF completo
             self.attack_animation_frame += self.attack_animation_speed
             if (self.current_direction in self.attack_animations and 
                 len(self.attack_animations[self.current_direction]) > 0):
-                if self.attack_animation_frame >= len(self.attack_animations[self.current_direction]):
-                    self.attacking = False  # Terminar animación de ataque
+                
+                # Si se completó un ciclo de animación, continuar atacando por un tiempo
+                frames_count = len(self.attack_animations[self.current_direction])
+                if int(self.attack_animation_frame) >= frames_count * 2:  # Reproducir 2 veces el GIF
+                    self.attacking = False
                     self.attack_animation_frame = 0
-        elif self.moving:
-            # Animación de movimiento
-            self.animation_frame += self.animation_speed
-            if (self.current_direction in self.movement_animations and 
-                len(self.movement_animations[self.current_direction]) > 0):
-                if self.animation_frame >= len(self.movement_animations[self.current_direction]):
-                    self.animation_frame = 0
+                    print("🎥 Animación de ataque completada")
+            else:
+                # Si no hay animación, terminar ataque rápidamente
+                if self.attack_animation_frame > 20:  # frames
+                    self.attacking = False
+                    self.attack_animation_frame = 0
         else:
-            # Idle - primer frame de la animación actual
-            self.animation_frame = 0
+            # Animación de movimiento
+            if self.moving:
+                self.animation_frame += self.animation_speed
+                if (self.current_direction in self.movement_animations and 
+                    len(self.movement_animations[self.current_direction]) > 0):
+                    frames_count = len(self.movement_animations[self.current_direction])
+                    if int(self.animation_frame) >= frames_count:
+                        self.animation_frame = 0  # Loop continuo
+            else:
+                # Si no se mueve, usar primer frame
+                self.animation_frame = 0
     
     def update_projectiles(self):
         """Actualiza todos los proyectiles mágicos"""
@@ -440,24 +457,33 @@ class ChamanMalvado:
         pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
     
     def draw_projectiles(self, screen, camera_x, camera_y):
-        """Dibuja proyectiles mágicos con efectos especiales"""
+        """Dibuja proyectiles mágicos con efectos especiales mejorados"""
         current_time = pygame.time.get_ticks()
         
         for projectile in self.projectiles:
             proj_x = int(projectile['x'] - camera_x)
             proj_y = int(projectile['y'] - camera_y)
             
+            # Usar color y tamaño personalizados si están disponibles
+            proj_color = projectile.get('color', (180, 0, 180))
+            proj_size = projectile.get('size', 12)
+            
             # Efecto pulsante para los proyectiles mágicos
             pulse = 1 + 0.3 * math.sin(current_time * 0.01)
-            radius = int(12 * pulse)
+            radius = int(proj_size * pulse)
             
-            # Proyectil mágico con múltiples capas
-            pygame.draw.circle(screen, (180, 0, 180), (proj_x, proj_y), radius)      # Aura exterior
-            pygame.draw.circle(screen, (255, 100, 255), (proj_x, proj_y), radius-3) # Núcleo mágico
-            pygame.draw.circle(screen, (255, 255, 255), (proj_x, proj_y), radius-6) # Centro brillante
+            # Proyectil mágico con múltiples capas y colores dinámicos
+            # Aura exterior
+            pygame.draw.circle(screen, proj_color, (proj_x, proj_y), radius)
+            # Núcleo mágico (más brillante)
+            bright_color = tuple(min(255, c + 75) for c in proj_color)
+            pygame.draw.circle(screen, bright_color, (proj_x, proj_y), radius-3)
+            # Centro brillante (blanco)
+            pygame.draw.circle(screen, (255, 255, 255), (proj_x, proj_y), max(1, radius-6))
             
-            # Partículas mágicas aleatorias alrededor del proyectil
+            # Partículas mágicas aleatorias alrededor del proyectil con color similar
             for _ in range(3):
                 particle_x = proj_x + random.randint(-15, 15)
                 particle_y = proj_y + random.randint(-15, 15)
-                pygame.draw.circle(screen, (255, 200, 255), (particle_x, particle_y), 2)
+                particle_color = tuple(min(255, c + 50) for c in proj_color)
+                pygame.draw.circle(screen, particle_color, (particle_x, particle_y), 2)

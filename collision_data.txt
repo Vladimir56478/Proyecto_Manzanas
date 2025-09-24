@@ -1,0 +1,2 @@
+# Datos de colisión del Nivel 1 - 1 bloques
+96,96,32,32
