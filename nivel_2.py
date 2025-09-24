@@ -406,11 +406,11 @@ class Nivel2:
         self.active_attack_system.handle_attack_input(keys_pressed, [self.chaman])
         
         # Actualizar chamán (IA vs personaje activo)
-        self.chaman.update(self.active_character.x, self.active_character.y)
+        players = [self.active_character, self.inactive_character]
+        self.chaman.update(players)
         
         # Comprobar impactos de proyectiles del chamán en ambos personajes
-        targets = [self.active_character, self.inactive_character]
-        self.chaman.check_projectile_hits(targets)
+        self.chaman.check_projectile_collisions(players)
         
         # Actualizar cámara para seguir la batalla
         target_camera_x = self.active_character.x - self.screen_width // 2

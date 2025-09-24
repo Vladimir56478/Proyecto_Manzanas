@@ -6,7 +6,9 @@ import time
 from audio_manager import get_audio_manager
 
 class Particle:
-    def __init__(self, x, y):
+    def __init__(self, x, y, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
         self.x = x
         self.y = y
         self.vel_x = random.uniform(-0.5, 0.5)
@@ -26,8 +28,8 @@ class Particle:
             self.reset()
     
     def reset(self):
-        self.x = random.uniform(0, 1920)  # Escalado para pantalla completa
-        self.y = random.uniform(1080, 1150)  # Escalado para pantalla completa
+        self.x = random.uniform(0, self.screen_width)  # Responsive a resolución actual
+        self.y = random.uniform(self.screen_height, self.screen_height + 70)  # Responsive a resolución actual
         self.alpha = random.uniform(100, 255)
         self.size = random.uniform(3, 9)  # Partículas más grandes
     
@@ -45,13 +47,31 @@ class IntroCinematica:
         pygame.init()
         pygame.mixer.init()  # Inicializar el mixer de audio
         
-        self.screen_width = 1920
-        self.screen_height = 1080
+        # Detección automática de resolución
+        info = pygame.display.Info()
+        self.screen_width = info.current_w
+        self.screen_height = info.current_h
+        
+        # Asegurar un tamaño mínimo
+        if self.screen_width < 800:
+            self.screen_width = 800
+        if self.screen_height < 600:
+            self.screen_height = 600
+        
+        print(f"🖥️ Resolución detectada: {self.screen_width}x{self.screen_height}")
+        
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.FULLSCREEN)
         pygame.display.set_caption("🍎 La Tierra de las Manzanas - Intro")
         
         self.clock = pygame.time.Clock()
         self.fps = 60
+        
+        # Factores de escala basados en resolución base (1920x1080)
+        self.scale_x = self.screen_width / 1920.0
+        self.scale_y = self.screen_height / 1080.0
+        self.scale_factor = min(self.scale_x, self.scale_y)  # Escalar proporcionalmente
+        
+        print(f"📏 Factores de escala: X={self.scale_x:.2f}, Y={self.scale_y:.2f}, Factor={self.scale_factor:.2f}")
         
         # Cargar y reproducir música de fondo
         self.load_background_music()
@@ -66,14 +86,25 @@ class IntroCinematica:
         self.text_color = (255, 255, 255)  # Blanco
         self.title_color = (255, 215, 0)  # Dorado
         
-        # Fuentes escaladas para pantalla completa 1920x1080
-        self.title_font = pygame.font.Font(None, 128)  # 2x escalado
-        self.text_font = pygame.font.Font(None, 64)   # 2x escalado
-        self.button_font = pygame.font.Font(None, 72)  # 2x escalado
+        # Fuentes escaladas responsivamente
+        base_title_size = 128
+        base_text_size = 64
+        base_button_size = 72
         
-        # Sistema de partículas
+        self.title_font = pygame.font.Font(None, int(base_title_size * self.scale_factor))
+        self.text_font = pygame.font.Font(None, int(base_text_size * self.scale_factor))
+        self.button_font = pygame.font.Font(None, int(base_button_size * self.scale_factor))
+        
+        print(f"📝 Tamaños de fuente: Título={int(base_title_size * self.scale_factor)}, "
+              f"Texto={int(base_text_size * self.scale_factor)}, "
+              f"Botón={int(base_button_size * self.scale_factor)}")
+        
+        # Sistema de partículas escalado
+        num_particles = max(30, int(50 * self.scale_factor))
         self.particles = [Particle(random.uniform(0, self.screen_width), 
-                                 random.uniform(0, self.screen_height)) for _ in range(50)]
+                                 random.uniform(0, self.screen_height), 
+                                 self.screen_width, self.screen_height) 
+                         for _ in range(num_particles)]
         
         # Historia dividida en fragmentos cinematográficos - VERSIÓN CALIBRADA
         # Cada entrada tiene: [texto, tiempo_inicio_segundos, tiempo_fin_segundos]
@@ -114,14 +145,19 @@ class IntroCinematica:
         self.intro_complete = False
         self.show_menu = False
         
-        # Botones del menú reorganizados y mejor espaciados
-        button_y_start = 600  # Posición más centrada
-        button_spacing = 120  # Mayor espaciado entre botones
+        # Botones del menú escalados responsivamente
+        button_y_start = int(self.screen_height * 0.55)  # 55% de la altura
+        button_spacing = int(120 * self.scale_factor)  # Espaciado escalado
+        button_width = int(500 * self.scale_factor)
+        button_height = int(80 * self.scale_factor)
+        
         self.buttons = {
-            'jugar': pygame.Rect(self.screen_width//2 - 250, button_y_start, 500, 80),
-            'creditos': pygame.Rect(self.screen_width//2 - 250, button_y_start + button_spacing, 500, 80),
-            'salir': pygame.Rect(self.screen_width//2 - 250, button_y_start + (button_spacing * 2), 500, 80)
+            'jugar': pygame.Rect(self.screen_width//2 - button_width//2, button_y_start, button_width, button_height),
+            'creditos': pygame.Rect(self.screen_width//2 - button_width//2, button_y_start + button_spacing, button_width, button_height),
+            'salir': pygame.Rect(self.screen_width//2 - button_width//2, button_y_start + (button_spacing * 2), button_width, button_height)
         }
+        
+        print(f"🎛️ Botones configurados: {button_width}x{button_height} en posición Y={button_y_start}")
         
         self.selected_button = 'jugar'
         self.character_selection = False
@@ -379,29 +415,34 @@ class IntroCinematica:
             lines = []
             current_line = ""
             
+            # Margen responsivo
+            margin = int(100 * self.scale_factor)
+            max_width = self.screen_width - margin
+            
             for word in words:
                 test_line = current_line + " " + word if current_line else word
                 text_surface = self.text_font.render(test_line, True, self.text_color)
-                if text_surface.get_width() > self.screen_width - 100:
+                if text_surface.get_width() > max_width:
                     lines.append(current_line)
                     current_line = word
                 else:
                     current_line = test_line
             lines.append(current_line)
             
-            # Centrar las líneas
-            total_height = len(lines) * 40
+            # Centrar las líneas con espaciado escalado
+            line_spacing = int(40 * self.scale_factor)
+            total_height = len(lines) * line_spacing
             start_y = self.screen_height // 2 - total_height // 2
             
             for i, line in enumerate(lines):
                 text_surface = self.text_font.render(line, True, self.text_color)
-                text_rect = text_surface.get_rect(center=(self.screen_width//2, start_y + i * 40))
+                text_rect = text_surface.get_rect(center=(self.screen_width//2, start_y + i * line_spacing))
                 self.screen.blit(text_surface, text_rect)
         
-        # Indicador para continuar o saltar
+        # Indicador para continuar o saltar (posición escalada)
         if self.narrator_playing:
             skip_text = self.text_font.render("Presiona ESPACIO para saltar narración...", True, (200, 200, 200))
-            skip_rect = skip_text.get_rect(center=(self.screen_width//2, self.screen_height - 50))
+            skip_rect = skip_text.get_rect(center=(self.screen_width//2, self.screen_height - int(50 * self.scale_factor)))
             self.screen.blit(skip_text, skip_rect)
         
         # Indicador de narrador activo
@@ -431,10 +472,11 @@ class IntroCinematica:
         self.screen.blit(story_text, text_rect)
     
     def draw_menu(self):
-        """Dibuja el menú principal"""
-        # Título
+        """Dibuja el menú principal con elementos escalados"""
+        # Título responsive
         title_surface = self.title_font.render("🍎 La Tierra de las Manzanas", True, self.title_color)
-        title_rect = title_surface.get_rect(center=(self.screen_width//2, 150))
+        title_y = int(150 * self.scale_factor)
+        title_rect = title_surface.get_rect(center=(self.screen_width//2, title_y))
         self.screen.blit(title_surface, title_rect)
         
         # Botones
@@ -457,23 +499,27 @@ class IntroCinematica:
             text_rect = text_surface.get_rect(center=button_rect.center)
             self.screen.blit(text_surface, text_rect)
         
-        # Instrucciones
+        # Instrucciones con posición escalada
         instructions = ["↑↓ - Navegar", "ENTER - Seleccionar"]
+        instructions_y = int(620 * self.scale_factor)
+        instruction_spacing = int(30 * self.scale_factor)
         for i, instruction in enumerate(instructions):
             text_surface = self.text_font.render(instruction, True, (180, 180, 180))
-            text_rect = text_surface.get_rect(center=(self.screen_width//2, 620 + i * 30))
+            text_rect = text_surface.get_rect(center=(self.screen_width//2, instructions_y + i * instruction_spacing))
             self.screen.blit(text_surface, text_rect)
     
     def draw_character_selection(self):
-        """Dibuja la selección de personaje"""
-        # Título principal
+        """Dibuja la selección de personaje con elementos escalados"""
+        # Título principal responsive
         title_surface = self.title_font.render("Elige tu Héroe", True, self.title_color)
-        title_rect = title_surface.get_rect(center=(self.screen_width//2, 200))
+        title_y = int(200 * self.scale_factor)
+        title_rect = title_surface.get_rect(center=(self.screen_width//2, title_y))
         self.screen.blit(title_surface, title_rect)
         
-        # Subtítulo
+        # Subtítulo responsive
         subtitle_surface = self.text_font.render("Cada personaje tiene habilidades únicas", True, (200, 200, 200))
-        subtitle_rect = subtitle_surface.get_rect(center=(self.screen_width//2, 280))
+        subtitle_y = int(280 * self.scale_factor)
+        subtitle_rect = subtitle_surface.get_rect(center=(self.screen_width//2, subtitle_y))
         self.screen.blit(subtitle_surface, subtitle_rect)
         
         # Opciones de personajes mejoradas
@@ -494,12 +540,12 @@ class IntroCinematica:
             }
         ]
         
-        # Posicionamiento en dos columnas mejorado
-        card_width = 400
-        card_height = 180
-        spacing = 150
+        # Posicionamiento en dos columnas escalado
+        card_width = int(400 * self.scale_factor)
+        card_height = int(180 * self.scale_factor)
+        spacing = int(150 * self.scale_factor)
         start_x = (self.screen_width - (2 * card_width + spacing)) // 2
-        card_y = 400
+        card_y = int(400 * self.scale_factor)
         
         for i, char in enumerate(characters):
             x_pos = start_x + (i * (card_width + spacing))
@@ -523,34 +569,41 @@ class IntroCinematica:
             pygame.draw.rect(self.screen, bg_color, char_rect)
             pygame.draw.rect(self.screen, border_color, char_rect, 4)
             
-            # Emoji del personaje
-            emoji_font = pygame.font.Font(None, 80)
+            # Emoji del personaje escalado
+            emoji_size = int(80 * self.scale_factor)
+            emoji_font = pygame.font.Font(None, emoji_size)
             emoji_surface = emoji_font.render(char['emoji'], True, self.title_color)
-            emoji_rect = emoji_surface.get_rect(center=(char_rect.centerx, char_rect.y + 40))
+            emoji_y = char_rect.y + int(40 * self.scale_factor)
+            emoji_rect = emoji_surface.get_rect(center=(char_rect.centerx, emoji_y))
             self.screen.blit(emoji_surface, emoji_rect)
             
-            # Nombre del personaje
+            # Nombre del personaje escalado
             name_surface = self.button_font.render(char['display'], True, text_color)
-            name_rect = name_surface.get_rect(center=(char_rect.centerx, char_rect.y + 90))
+            name_y = char_rect.y + int(90 * self.scale_factor)
+            name_rect = name_surface.get_rect(center=(char_rect.centerx, name_y))
             self.screen.blit(name_surface, name_rect)
             
-            # Primera línea de descripción
+            # Primera línea de descripción escalada
             line1_surface = self.text_font.render(char['line1'], True, text_color)
-            line1_rect = line1_surface.get_rect(center=(char_rect.centerx, char_rect.y + 125))
+            line1_y = char_rect.y + int(125 * self.scale_factor)
+            line1_rect = line1_surface.get_rect(center=(char_rect.centerx, line1_y))
             self.screen.blit(line1_surface, line1_rect)
             
-            # Segunda línea de descripción
-            small_text_font = pygame.font.Font(None, 48)
+            # Segunda línea de descripción escalada
+            small_text_size = int(48 * self.scale_factor)
+            small_text_font = pygame.font.Font(None, small_text_size)
             line2_surface = small_text_font.render(char['line2'], True, (180, 180, 180))
-            line2_rect = line2_surface.get_rect(center=(char_rect.centerx, char_rect.y + 155))
+            line2_y = char_rect.y + int(155 * self.scale_factor)
+            line2_rect = line2_surface.get_rect(center=(char_rect.centerx, line2_y))
             self.screen.blit(line2_surface, line2_rect)
         
-        # Instrucciones mejoradas
-        instructions_y = 700
+        # Instrucciones mejoradas con posición escalada
+        instructions_y = int(700 * self.scale_factor)
         instructions = ["← → - Cambiar Héroe", "ENTER - Comenzar Aventura", "ESC - Menú Principal"]
+        instruction_spacing = int(50 * self.scale_factor)
         for i, instruction in enumerate(instructions):
             text_surface = self.text_font.render(instruction, True, (200, 200, 200))
-            text_rect = text_surface.get_rect(center=(self.screen_width//2, instructions_y + i * 50))
+            text_rect = text_surface.get_rect(center=(self.screen_width//2, instructions_y + i * instruction_spacing))
             self.screen.blit(text_surface, text_rect)
     
     def draw(self):

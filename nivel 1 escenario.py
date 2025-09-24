@@ -142,8 +142,18 @@ class Game:
         self.loading_screen.update_progress("Escenario", "Descargando desde GitHub...")
         self.loading_screen.draw()
         
-        escenario_url = "https://github.com/user-attachments/assets/03339362-2bb5-4bf7-b4f5-b3ea4babbb92"
-        self.background = Background(escenario_url)
+        # URLs de GitHub para imágenes
+        self.github_urls = {
+            'escenario_principal': "https://github.com/user-attachments/assets/03339362-2bb5-4bf7-b4f5-b3ea4babbb92",
+            'imagen_adicional': "https://github.com/user-attachments/assets/0575a74a-96b6-4c69-b052-ad187ee067d4"
+        }
+        
+        self.background = Background(self.github_urls['escenario_principal'])
+        
+        # Cargar imagen adicional usando el mismo sistema
+        self.loading_screen.update_progress("Escenario", "Cargando imagen adicional...")
+        self.loading_screen.draw()
+        self.additional_image = self.load_github_image(self.github_urls['imagen_adicional'])
         self.world_width = self.background.width
         self.world_height = self.background.height
         
@@ -238,6 +248,43 @@ class Game:
         
         print("✅ Nivel 1 inicializado correctamente")
     
+    def load_github_image(self, url):
+        """Carga una imagen desde GitHub siguiendo el mismo procedimiento que Background"""
+        try:
+            print(f"📥 Descargando imagen desde GitHub: {url}")
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            
+            image_data = BytesIO(response.content)
+            pil_image = Image.open(image_data)
+            
+            # Información de la imagen original
+            original_width, original_height = pil_image.size
+            print(f"📐 Dimensiones de la imagen: {original_width}x{original_height}")
+            
+            # Convertir a formato pygame
+            pil_image = pil_image.convert('RGBA')  # Usar RGBA para soporte de transparencia
+            image_data = pil_image.tobytes()
+            
+            pygame_surface = pygame.image.fromstring(image_data, pil_image.size, 'RGBA')
+            pygame_surface = pygame_surface.convert_alpha()
+            
+            print(f"✅ Imagen cargada exitosamente: {original_width}x{original_height}")
+            return pygame_surface
+            
+        except Exception as e:
+            print(f"❌ Error cargando imagen desde GitHub: {e}")
+            # Crear imagen de fallback
+            fallback_surface = pygame.Surface((64, 64), pygame.SRCALPHA)
+            fallback_surface.fill((255, 0, 255, 128))  # Magenta semi-transparente
+            pygame.draw.rect(fallback_surface, (255, 255, 255), (0, 0, 64, 64), 2)
+            font = pygame.font.Font(None, 24)
+            text = font.render("IMG", True, (255, 255, 255))
+            text_rect = text.get_rect(center=(32, 32))
+            fallback_surface.blit(text, text_rect)
+            print("🎨 Usando imagen de respaldo")
+            return fallback_surface
+    
     def setup_enemy_spawns(self):
         """Configura 6 áreas de spawn para los 15 gusanos"""
         spawn_areas = [
@@ -284,6 +331,11 @@ class Game:
                     return False
                 elif event.key == pygame.K_r and (self.game_over or self.victory):
                     self.restart_game()
+                elif event.key == pygame.K_n and self.victory:
+                    # Ir al Nivel 2
+                    print("🌟 Iniciando transición al Nivel 2...")
+                    self.launch_level_2()
+                    return False
                 elif event.key == pygame.K_TAB:
                     self.switch_character()
                 elif event.key == pygame.K_x:
@@ -340,10 +392,7 @@ class Game:
         
         if self.active_character == self.juan:
             hit = self.juan_attack.special_attack(worms)
-            if hit:
-                for enemy in worms:
-                    if hasattr(enemy, 'health') and enemy.health <= 0:
-                        self.enemies_defeated += 1
+            # El conteo se maneja en process_worm_drops()
         else:  # Adán
             if worms:
                 target = min(worms, key=lambda w: 
@@ -431,20 +480,24 @@ class Game:
                                 worm.last_attack_time = current_time
     
     def process_worm_drops(self):
-        """Procesa drops de gusanos muertos"""
-        for worm in self.worm_spawner.get_worms():
-            if (hasattr(worm, 'health') and worm.health <= 0 and 
-                not getattr(worm, 'drop_processed', False)):
-                
+        """Procesa drops de gusanos muertos y conteo de derrotas"""
+        # Procesar gusanos muertos del spawner
+        for worm in self.worm_spawner.worms[:]:
+            if not worm.alive and not getattr(worm, 'drop_processed', False):
                 worm.drop_processed = True
                 self.enemies_defeated += 1
                 
-                # 60% probabilidad de drop
-                if random.random() < 0.6:
-                    drop_x = worm.x + random.randint(-30, 30)
-                    drop_y = worm.y + random.randint(-30, 30)
-                    
-                    if random.random() < 0.6:  # 60% manzana, 40% poción
+                print(f"💀 Gusano derrotado! Total: {self.enemies_defeated}/{self.victory_condition}")
+                
+                # Generar drops con probabilidades mejoradas
+                drop_x = worm.x + random.randint(-40, 40)
+                drop_y = worm.y + random.randint(-40, 40)
+                
+                # 70% probabilidad total de drop
+                drop_chance = random.random()
+                if drop_chance < 0.70:
+                    # 50% manzana, 20% poción
+                    if random.random() < 0.714:  # 50/70 = 0.714
                         self.dropped_items.append({
                             'type': 'apple',
                             'x': drop_x, 'y': drop_y,
@@ -458,6 +511,9 @@ class Game:
                             'spawn_time': pygame.time.get_ticks()
                         })
                         print("🧪 Drop: Poción de escudo")
+                
+                # Remover el gusano muerto del spawner
+                self.worm_spawner.worms.remove(worm)
     
     def update_collectibles(self):
         """Actualiza coleccionables y colisiones"""
@@ -518,10 +574,11 @@ class Game:
     
     def check_game_conditions(self):
         """Verifica condiciones de victoria y derrota"""
-        # Victoria: 15 gusanos derrotados
+        # Victoria: 15 gusanos derrotados -> Ir a Nivel 2
         if self.enemies_defeated >= self.victory_condition:
             self.victory = True
-            print("🎉 ¡VICTORIA! Has derrotado a todos los gusanos")
+            print("🎉 ¡VICTORIA! Has completado el Nivel 1")
+            print("🌟 Preparando transición al Nivel 2...")
         
         # Derrota: ambos personajes muertos
         if self.juan.health <= 0 and self.adan.health <= 0:
@@ -601,6 +658,34 @@ class Game:
         
         print("🔄 Juego reiniciado")
     
+    def launch_level_2(self):
+        """Lanza el Nivel 2 del juego"""
+        try:
+            print("🚀 Cargando Nivel 2...")
+            
+            # Determinar personaje seleccionado
+            selected_character = 'juan' if self.active_character == self.juan else 'adan'
+            
+            # Cerrar pygame del nivel actual
+            pygame.quit()
+            
+            # Importar y ejecutar Nivel 2
+            from nivel_2 import Nivel2
+            
+            # Crear e iniciar Nivel 2
+            nivel2 = Nivel2(selected_character)
+            nivel2.run()
+            
+        except ImportError:
+            print("❌ Error: No se pudo cargar el archivo nivel_2.py")
+            print("Asegúrate de que el archivo nivel_2.py esté en la misma carpeta")
+        except Exception as e:
+            print(f"❌ Error lanzando Nivel 2: {e}")
+            
+        # Reinicializar pygame para este nivel si hay error
+        pygame.init()
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.FULLSCREEN)
+    
     # === RENDERIZADO ===
     
     def draw(self):
@@ -611,6 +696,9 @@ class Game:
         # Dibujar fondo
         self.background.draw(self.screen, self.camera_x, self.camera_y, 
                            self.screen_width, self.screen_height)
+        
+        # Dibujar imagen adicional (puede ser decorativa, objeto, etc.)
+        self.draw_additional_image()
         
         # Dibujar personajes
         if self.inactive_character.health > 0:
@@ -653,6 +741,28 @@ class Game:
             self.draw_victory()
         
         pygame.display.flip()
+    
+    def draw_additional_image(self):
+        """Dibuja la imagen adicional cargada desde GitHub"""
+        if hasattr(self, 'additional_image') and self.additional_image:
+            # Posición donde dibujar la imagen (puedes ajustar según necesidades)
+            # Por ejemplo, como objeto decorativo en el mundo
+            world_x = 200  # Posición X en el mundo
+            world_y = 200  # Posición Y en el mundo
+            
+            # Convertir a coordenadas de pantalla
+            screen_x = world_x - self.camera_x
+            screen_y = world_y - self.camera_y
+            
+            # Solo dibujar si está visible en pantalla
+            image_rect = self.additional_image.get_rect()
+            if (-image_rect.width < screen_x < self.screen_width and 
+                -image_rect.height < screen_y < self.screen_height):
+                
+                # Escalar la imagen si es necesario (opcional)
+                # scaled_image = pygame.transform.scale(self.additional_image, (64, 64))
+                
+                self.screen.blit(self.additional_image, (screen_x, screen_y))
     
     def draw_collectibles(self):
         """Dibuja manzanas y pociones"""
@@ -821,21 +931,39 @@ class Game:
         self.screen.blit(overlay, (0, 0))
         
         font_large = pygame.font.Font(None, 144)
+        font_medium = pygame.font.Font(None, 96)
         font_small = pygame.font.Font(None, 72)
         
         # Título
-        victory_text = font_large.render("🎉 ¡VICTORIA!", True, (255, 215, 0))
-        victory_rect = victory_text.get_rect(center=(self.screen_width//2, self.screen_height//2 - 100))
+        victory_text = font_large.render("🎉 ¡NIVEL 1 COMPLETADO!", True, (255, 215, 0))
+        victory_rect = victory_text.get_rect(center=(self.screen_width//2, self.screen_height//2 - 150))
         self.screen.blit(victory_text, victory_rect)
         
-        # Mensaje
-        message_text = font_small.render("¡Has liberado la Tierra de las Manzanas!", True, (255, 255, 255))
-        message_rect = message_text.get_rect(center=(self.screen_width//2, self.screen_height//2))
+        # Mensaje principal
+        message_text = font_medium.render("¡Has liberado la Tierra de las Manzanas!", True, (255, 255, 255))
+        message_rect = message_text.get_rect(center=(self.screen_width//2, self.screen_height//2 - 50))
         self.screen.blit(message_text, message_rect)
         
-        # Instrucción
-        restart_text = font_small.render("Presiona R para jugar de nuevo", True, (200, 200, 200))
-        restart_rect = restart_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 100))
+        # Estadísticas
+        stats_text = font_small.render(f"Gusanos derrotados: {self.enemies_defeated}", True, (200, 255, 200))
+        stats_rect = stats_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 20))
+        self.screen.blit(stats_text, stats_rect)
+        
+        # Botón para Nivel 2 (destacado)
+        nivel2_text = font_medium.render("⬆️ Presiona N para ir al NIVEL 2", True, (255, 100, 100))
+        nivel2_rect = nivel2_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 80))
+        
+        # Fondo para el botón de Nivel 2
+        button_bg = pygame.Rect(nivel2_rect.x - 20, nivel2_rect.y - 10, 
+                               nivel2_rect.width + 40, nivel2_rect.height + 20)
+        pygame.draw.rect(self.screen, (50, 0, 50), button_bg)
+        pygame.draw.rect(self.screen, (255, 100, 100), button_bg, 3)
+        
+        self.screen.blit(nivel2_text, nivel2_rect)
+        
+        # Opción de reinicio
+        restart_text = font_small.render("R - Reiniciar Nivel 1", True, (200, 200, 200))
+        restart_rect = restart_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 150))
         self.screen.blit(restart_text, restart_rect)
     
     # === BUCLE PRINCIPAL ===
