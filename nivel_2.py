@@ -447,22 +447,30 @@ class Nivel2:
                 return False
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    return False
+                    if self.game_over or self.victory:
+                        return False  # Salir en pantallas finales
+                    else:
+                        # Toggle pausa durante el juego
+                        self.game_paused = not self.game_paused
+                        print(f"⏸️ Juego {'pausado' if self.game_paused else 'reanudado'}")
                 elif event.key == pygame.K_F1:
                     # Toggle modo editor (igual que nivel 1)
                     self.collision_manager.editor_mode = not self.collision_manager.editor_mode
                     mode = "activado" if self.collision_manager.editor_mode else "desactivado"
                     print(f"🛠️ Modo editor {mode} en Nivel 2")
-                elif event.key == pygame.K_TAB and not self.game_over and not self.victory and not self.collision_manager.editor_mode:
+                elif event.key == pygame.K_TAB and not self.game_over and not self.victory and not self.collision_manager.editor_mode and not self.game_paused:
                     if self.switch_cooldown <= 0 and self.juan.health > 0 and self.adan.health > 0:
                         self.switch_character()
                         self.switch_cooldown = 30
                 elif event.key == pygame.K_r and (self.game_over or self.victory):
                     self.restart_game()
-                elif event.key == pygame.K_SPACE and not self.game_over and not self.victory and not self.collision_manager.editor_mode:
+                elif event.key == pygame.K_m and (self.game_over or self.victory or self.game_paused):
+                    print("📋 Volviendo al menú principal...")
+                    return "MAIN_MENU"
+                elif event.key == pygame.K_SPACE and not self.game_over and not self.victory and not self.collision_manager.editor_mode and not self.game_paused:
                     # Ataque básico
                     self.perform_basic_attack()
-                elif event.key == pygame.K_x and not self.game_over and not self.victory and not self.collision_manager.editor_mode:
+                elif event.key == pygame.K_x and not self.game_over and not self.victory and not self.collision_manager.editor_mode and not self.game_paused:
                     # Ataque especial
                     self.perform_special_attack()
                 # Manejo del menú de mejoras (simplificado)
@@ -920,11 +928,13 @@ class Nivel2:
         if self.show_upgrade_menu:
             self.draw_upgrade_menu()
         
-        # Dibujar estados finales
+        # Dibujar estados finales y menús
         if self.game_over:
             self.draw_game_over()
         elif self.victory:
             self.draw_victory()
+        elif self.game_paused and not self.collision_manager.editor_mode:
+            self.draw_pause_menu()
         
         pygame.display.flip()
     
@@ -1126,63 +1136,139 @@ class Nivel2:
             self.screen.blit(control_surface, (30, self.screen_height - 200 + i * 40))
     
     def draw_game_over(self):
-        """Dibuja la pantalla de game over"""
-        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 200))
-        self.screen.blit(overlay, (0, 0))
+        """Dibuja la pantalla de game over mejorada"""
+        # Fondo sólido negro para coherencia visual
+        self.screen.fill((0, 0, 0))
         
-        font_huge = pygame.font.Font(None, 150)
-        font_large = pygame.font.Font(None, 84)
+        font_huge = pygame.font.Font(None, 180)
+        font_large = pygame.font.Font(None, 96)
+        font_medium = pygame.font.Font(None, 72)
         
-        # Mensaje principal
-        text = font_huge.render("GAME OVER", True, (255, 0, 0))
-        text_rect = text.get_rect(center=(self.screen_width//2, self.screen_height//2 - 80))
-        self.screen.blit(text, text_rect)
+        # Título principal con efecto
+        title = font_huge.render("💀 GAME OVER 💀", True, (255, 100, 100))
+        title_rect = title.get_rect(center=(self.screen_width//2, 300))
+        self.screen.blit(title, title_rect)
         
-        # Mensaje secundario
-        subtitle = font_large.render("El Chamán Malvado ha triunfado...", True, (255, 100, 100))
-        subtitle_rect = subtitle.get_rect(center=(self.screen_width//2, self.screen_height//2 + 20))
+        # Mensaje temático
+        subtitle = font_large.render("El Chamán Malvado ha triunfado...", True, (255, 150, 150))
+        subtitle_rect = subtitle.get_rect(center=(self.screen_width//2, 420))
         self.screen.blit(subtitle, subtitle_rect)
         
-        # Instrucciones
-        restart_text = font_large.render("Presiona R para reintentar", True, (255, 255, 255))
-        restart_rect = restart_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 120))
-        self.screen.blit(restart_text, restart_rect)
+        # Opciones mejoradas
+        restart = font_medium.render("R - Reintentar", True, (200, 255, 200))
+        restart_rect = restart.get_rect(center=(self.screen_width//2, 520))
+        self.screen.blit(restart, restart_rect)
+        
+        menu = font_medium.render("M - Menú Principal", True, (200, 200, 255))
+        menu_rect = menu.get_rect(center=(self.screen_width//2, 580))
+        self.screen.blit(menu, menu_rect)
+        
+        exit_text = font_medium.render("ESC - Salir", True, (255, 200, 200))
+        exit_rect = exit_text.get_rect(center=(self.screen_width//2, 640))
+        self.screen.blit(exit_text, exit_rect)
     
     def draw_victory(self):
-        """Dibuja la pantalla de victoria"""
+        """Dibuja la pantalla de victoria mejorada"""
+        # Fondo con gradiente dorado para coherencia visual
+        self.screen.fill((30, 20, 0))
         overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
-        overlay.fill((255, 215, 0, 50))  # Dorado translúcido
+        overlay.fill((255, 215, 0, 40))  # Dorado translúcido
         self.screen.blit(overlay, (0, 0))
         
-        font_huge = pygame.font.Font(None, 150)
-        font_large = pygame.font.Font(None, 84)
+        font_huge = pygame.font.Font(None, 180)
+        font_large = pygame.font.Font(None, 96)
+        font_medium = pygame.font.Font(None, 72)
+        font_small = pygame.font.Font(None, 48)
         
-        # Mensaje principal
-        text = font_huge.render("¡VICTORIA ÉPICA!", True, (255, 215, 0))
-        text_rect = text.get_rect(center=(self.screen_width//2, self.screen_height//2 - 100))
-        self.screen.blit(text, text_rect)
+        # Título principal épico
+        title = font_huge.render("🏆 ¡VICTORIA ÉPICA! 🏆", True, (255, 215, 0))
+        title_rect = title.get_rect(center=(self.screen_width//2, 250))
+        self.screen.blit(title, title_rect)
         
-        # Mensaje secundario
+        # Mensaje de logro
         subtitle = font_large.render("¡Has derrotado al Chamán Malvado!", True, (200, 255, 200))
-        subtitle_rect = subtitle.get_rect(center=(self.screen_width//2, self.screen_height//2))
+        subtitle_rect = subtitle.get_rect(center=(self.screen_width//2, 360))
         self.screen.blit(subtitle, subtitle_rect)
         
         # Estadísticas de la batalla
+        stats_title = font_medium.render("📊 Estadísticas de Batalla:", True, (255, 255, 255))
+        stats_title_rect = stats_title.get_rect(center=(self.screen_width//2, 450))
+        self.screen.blit(stats_title, stats_title_rect)
+        
         stats = [
-            f"Mejoras obtenidas: {sum(self.upgrades.values())}",
-            f"Vida restante: {self.active_character.health}/{self.active_character.max_health}"
+            f"👤 Héroe activo: {self.active_character.name}",
+            f"❤️ Vida restante: {self.active_character.health}/{self.active_character.max_health}",
+            f"⚡ Mejoras obtenidas: {sum(self.upgrades.values())}",
+            f"🐛 Gusanos derrotados: {self.worm_spawner.total_spawned}"
         ]
         
         for i, stat in enumerate(stats):
-            stat_surface = font_large.render(stat, True, (255, 255, 255))
-            stat_rect = stat_surface.get_rect(center=(self.screen_width//2, self.screen_height//2 + 80 + i * 50))
+            stat_surface = font_small.render(stat, True, (255, 255, 200))
+            stat_rect = stat_surface.get_rect(center=(self.screen_width//2, 500 + i * 40))
             self.screen.blit(stat_surface, stat_rect)
         
-        # Instrucciones
-        restart_text = font_large.render("Presiona R para volver a jugar", True, (255, 255, 255))
-        restart_rect = restart_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 200))
-        self.screen.blit(restart_text, restart_rect)
+        # Opciones mejoradas
+        restart = font_medium.render("R - Volver a jugar", True, (200, 255, 200))
+        restart_rect = restart.get_rect(center=(self.screen_width//2, 680))
+        self.screen.blit(restart, restart_rect)
+        
+        menu = font_medium.render("M - Menú Principal", True, (200, 200, 255))
+        menu_rect = menu.get_rect(center=(self.screen_width//2, 740))
+        self.screen.blit(menu, menu_rect)
+        
+        exit_text = font_medium.render("ESC - Salir", True, (255, 200, 200))
+        exit_rect = exit_text.get_rect(center=(self.screen_width//2, 800))
+        self.screen.blit(exit_text, exit_rect)
+    
+    def draw_pause_menu(self):
+        """Dibuja el menú de pausa durante el juego"""
+        # Fondo semitransparente
+        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+        
+        font_huge = pygame.font.Font(None, 150)
+        font_large = pygame.font.Font(None, 84)
+        font_medium = pygame.font.Font(None, 72)
+        
+        # Título del menú
+        title = font_huge.render("⏸️ JUEGO PAUSADO", True, (255, 255, 255))
+        title_rect = title.get_rect(center=(self.screen_width//2, 250))
+        self.screen.blit(title, title_rect)
+        
+        # Información del estado actual
+        hero_info = font_large.render(f"Héroe activo: {self.active_character.name}", True, (200, 200, 255))
+        hero_rect = hero_info.get_rect(center=(self.screen_width//2, 350))
+        self.screen.blit(hero_info, hero_rect)
+        
+        health_info = font_large.render(f"Vida: {self.active_character.health}/{self.active_character.max_health}", True, (255, 200, 200))
+        health_rect = health_info.get_rect(center=(self.screen_width//2, 410))
+        self.screen.blit(health_info, health_rect)
+        
+        # Opciones del menú
+        continue_text = font_medium.render("ESC - Continuar partida", True, (200, 255, 200))
+        continue_rect = continue_text.get_rect(center=(self.screen_width//2, 520))
+        self.screen.blit(continue_text, continue_rect)
+        
+        menu_text = font_medium.render("M - Menú Principal", True, (200, 200, 255))
+        menu_rect = menu_text.get_rect(center=(self.screen_width//2, 580))
+        self.screen.blit(menu_text, menu_rect)
+        
+        # Controles recordatorio
+        controls_title = font_large.render("🎮 Controles:", True, (255, 255, 200))
+        controls_title_rect = controls_title.get_rect(center=(self.screen_width//2, 680))
+        self.screen.blit(controls_title, controls_title_rect)
+        
+        controls = [
+            "TAB - Cambiar héroe",
+            "ESPACIO - Ataque básico", 
+            "X - Ataque especial"
+        ]
+        
+        for i, control in enumerate(controls):
+            control_surface = font_medium.render(control, True, (255, 255, 255))
+            control_rect = control_surface.get_rect(center=(self.screen_width//2, 740 + i * 35))
+            self.screen.blit(control_surface, control_rect)
     
     def run(self):
         """Ejecuta el nivel 2"""

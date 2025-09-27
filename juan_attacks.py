@@ -233,7 +233,14 @@ class JuanAttack:
             return
         
         for enemy in self.attack_enemies_target:
-            if hasattr(enemy, 'alive') and enemy.alive:
+            # Verificar si el enemigo está vivo (compatibilidad con gusanos y chamán)
+            is_alive = False
+            if hasattr(enemy, 'alive'):
+                is_alive = enemy.alive  # Para gusanos
+            elif hasattr(enemy, 'health'):
+                is_alive = enemy.health > 0  # Para Chamán y otros enemies con solo health
+            
+            if is_alive:
                 enemy.take_damage(self.attack_damage_pending)
                 print(f"👊 Juan combo x{self.combo_count + 1} impactó hacia {self.attack_direction} ({self.attack_damage_pending} daño)")
         

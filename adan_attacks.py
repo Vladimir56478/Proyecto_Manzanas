@@ -7,7 +7,9 @@ class AdanAttack:
     def __init__(self, character):
         self.character = character
         self.projectiles = []
-        self.melee_attacks = []
+        self.combo_hits = []
+        self.special_effects = []
+        self.melee_attacks = []  # Añadir atributo faltante
         self.last_attack_time = 0
         self.attack_cooldown = 500
         
@@ -199,7 +201,14 @@ class AdanAttack:
             return
         
         for enemy in self.attack_enemies_target:
-            if hasattr(enemy, 'alive') and enemy.alive:
+            # Verificar si el enemigo está vivo (compatibilidad con gusanos y chamán)
+            is_alive = False
+            if hasattr(enemy, 'alive'):
+                is_alive = enemy.alive  # Para gusanos
+            elif hasattr(enemy, 'health'):
+                is_alive = enemy.health > 0  # Para Chamán y otros enemies con solo health
+            
+            if is_alive:
                 enemy.take_damage(self.attack_damage_pending)
                 print(f"⚔️ Adán golpeó con ataque cuerpo a cuerpo hacia {self.attack_direction} ({self.attack_damage_pending} daño)")
         

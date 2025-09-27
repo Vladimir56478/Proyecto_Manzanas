@@ -45,10 +45,10 @@ class ChamanAttack:
         self.last_basic_attack = 0
         self.last_special_attack = 0
         
-        # Propiedades de daño
+        # Propiedades de daño - MEJORADAS
         self.basic_damage = 25
         self.special_damage = 45
-        self.magic_range = 350  # Mayor alcance de hechizos
+        self.magic_range = 500  # Aumentado de 350 para mayor alcance
         
         # URLs de animaciones de ataque desde assets locales
         self.attack_urls = {
@@ -67,9 +67,9 @@ class ChamanAttack:
         self.attack_start_time = 0
         self.attack_duration = 800  # Duración de animación de ataque
         
-        # Proyectiles mágicos
+        # Proyectiles mágicos - MEJORADOS
         self.magic_projectiles = []
-        self.projectile_speed = 4.0
+        self.projectile_speed = 5.5  # Aumentado de 4.0 para mayor velocidad
         
         # Efectos especiales
         self.magic_effects = []
@@ -222,7 +222,7 @@ class ChamanAttack:
             velocity_x = self.projectile_speed * math.cos(angle_rad)
             velocity_y = self.projectile_speed * math.sin(angle_rad)
             
-            # Crear proyectil con dispersión angular
+            # Crear proyectil con dispersión angular - MEJORADO
             projectile = {
                 'x': start_x,
                 'y': start_y,
@@ -232,7 +232,7 @@ class ChamanAttack:
                 'max_range': self.magic_range,
                 'traveled': 0,
                 'active': True,
-                'size': 12,  # Más pequeños para mejor balance
+                'size': 18,  # Aumentado de 12 para mayor volumen
                 'angle': angle  # Guardar ángulo para efectos visuales
             }
             
@@ -262,10 +262,10 @@ class ChamanAttack:
                 'velocity_x': velocity_x,
                 'velocity_y': velocity_y,
                 'damage': self.special_damage,
-                'max_range': self.magic_range * 1.5,
+                'max_range': self.magic_range * 1.8,  # Aumentado de 1.5 para mayor alcance
                 'traveled': 0,
                 'active': True,
-                'size': 20,
+                'size': 25,  # Aumentado de 20 para mayor volumen
                 'special': True
             }
             
