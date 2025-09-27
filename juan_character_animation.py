@@ -52,6 +52,11 @@ class JuanCharacter:
                     pygame_surface = pygame_surface.convert_alpha()
                     pygame_surface.set_colorkey((255, 255, 255))
                     
+                    # Escalar 56% más grande (30% + 20% adicional)
+                    original_size = pygame_surface.get_size()
+                    new_size = (int(original_size[0] * 1.56), int(original_size[1] * 1.56))
+                    pygame_surface = pygame.transform.scale(pygame_surface, new_size)
+                    
                     frames.append(pygame_surface)
                 
                 self.animations[direction] = frames
@@ -59,7 +64,7 @@ class JuanCharacter:
                 
             except Exception as e:
                 print(f"❌ Error cargando {direction}: {e}")
-                backup_surface = pygame.Surface((64, 64))
+                backup_surface = pygame.Surface((100, 100))  # 64 * 1.56 = 100
                 backup_surface.fill((255, 0, 255))
                 self.animations[direction] = [backup_surface]
     

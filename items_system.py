@@ -19,19 +19,43 @@ class Item:
         self.surface = self.create_item_surface()
         
     def create_item_surface(self):
-        """Crea la superficie visual del item"""
+        """Carga la superficie visual del item desde URLs"""
         surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         
-        if self.type == 'apple':
-            # Manzana roja
-            pygame.draw.circle(surface, (220, 20, 60), (16, 20), 12)
-            pygame.draw.circle(surface, (34, 139, 34), (16, 12), 4)  # Hoja
-            pygame.draw.rect(surface, (101, 67, 33), (15, 8, 2, 6))  # Tallo
-        elif self.type == 'potion':
-            # Poción azul
-            pygame.draw.rect(surface, (0, 100, 200), (8, 16, 16, 12))
-            pygame.draw.circle(surface, (0, 100, 200), (16, 16), 8)
-            pygame.draw.rect(surface, (139, 69, 19), (14, 12, 4, 6))  # Tapón
+        # URLs correctas de los items
+        item_urls = {
+            'apple': 'https://github.com/user-attachments/assets/8d98de91-3834-456d-8dac-484029df9a02',
+            'potion': 'https://github.com/user-attachments/assets/5365c2ea-ad1e-4055-8d3b-de1547e10396'
+        }
+        
+        try:
+            if self.type in item_urls:
+                import requests
+                from PIL import Image
+                from io import BytesIO
+                
+                response = requests.get(item_urls[self.type], timeout=5)
+                response.raise_for_status()
+                
+                pil_image = Image.open(BytesIO(response.content))
+                pil_image = pil_image.convert('RGBA')
+                pil_image = pil_image.resize((self.width, self.height), Image.LANCZOS)
+                
+                image_data = pil_image.tobytes()
+                surface = pygame.image.fromstring(image_data, (self.width, self.height), 'RGBA')
+                surface = surface.convert_alpha()
+                
+        except Exception as e:
+            print(f"⚠️ Error cargando {self.type}: {e}, usando fallback")
+            # Fallback a sprites simples
+            if self.type == 'apple':
+                pygame.draw.circle(surface, (220, 20, 60), (16, 20), 12)
+                pygame.draw.circle(surface, (34, 139, 34), (16, 12), 4)
+                pygame.draw.rect(surface, (101, 67, 33), (15, 8, 2, 6))
+            elif self.type == 'potion':
+                pygame.draw.rect(surface, (0, 100, 200), (8, 16, 16, 12))
+                pygame.draw.circle(surface, (0, 100, 200), (16, 16), 8)
+                pygame.draw.rect(surface, (139, 69, 19), (14, 12, 4, 6))
             
         return surface
     

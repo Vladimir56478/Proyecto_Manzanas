@@ -73,6 +73,11 @@ class AdanAttack:
                     pygame_surface = pygame_surface.convert_alpha()
                     pygame_surface.set_colorkey((255, 255, 255))
                     
+                    # Escalar 56% más grande (30% + 20% adicional)
+                    original_size = pygame_surface.get_size()
+                    new_size = (int(original_size[0] * 1.56), int(original_size[1] * 1.56))
+                    pygame_surface = pygame.transform.scale(pygame_surface, new_size)
+                    
                     frames.append(pygame_surface)
                 
                 self.attack_animations[direction] = frames
@@ -81,7 +86,7 @@ class AdanAttack:
             except Exception as e:
                 print(f"❌ Error cargando ataque {direction}: {e}")
                 # Crear frame de respaldo en caso de error
-                backup_surface = pygame.Surface((64, 64), pygame.SRCALPHA)
+                backup_surface = pygame.Surface((100, 100), pygame.SRCALPHA)  # 64 * 1.56 = 100
                 backup_surface.fill((255, 0, 0, 128))  # Rojo semitransparente
                 self.attack_animations[direction] = [backup_surface]
     
@@ -189,7 +194,7 @@ class AdanAttack:
         self.attack_enemies_target = []
         
         for enemy in enemies:
-            enemy_rect = pygame.Rect(enemy.x, enemy.y, 64, 64)
+            enemy_rect = pygame.Rect(enemy.x, enemy.y, 100, 100)  # 64 * 1.56 = 100
             if attack_rect.colliderect(enemy_rect):
                 self.attack_enemies_target.append(enemy)
         
@@ -257,7 +262,7 @@ class AdanAttack:
             
             projectile_rect = pygame.Rect(projectile['x'] - 5, projectile['y'] - 5, 10, 10)
             for enemy in enemies:
-                enemy_rect = pygame.Rect(enemy.x, enemy.y, 64, 64)
+                enemy_rect = pygame.Rect(enemy.x, enemy.y, 100, 100)  # 64 * 1.56 = 100
                 if projectile_rect.colliderect(enemy_rect) and projectile['active']:
                     enemy.take_damage(projectile['damage'])
                     projectile['active'] = False
@@ -301,15 +306,4 @@ class AdanAttack:
                 pygame.draw.circle(screen, (255, 200, 150), (x, y), 5)
                 pygame.draw.circle(screen, (255, 255, 200), (x, y), 3)
         
-        # Dibujar efectos de ataques cuerpo a cuerpo con mejor alpha blending
-        for attack in self.melee_attacks:
-            progress = (current_time - attack['start_time']) / attack['duration']
-            alpha = int(255 * (1 - progress))
-            
-            effect_surface = pygame.Surface((attack['rect'].width, attack['rect'].height), pygame.SRCALPHA)
-            effect_surface.set_alpha(alpha)
-            
-            # Color dorado brillante para ataques de Adán
-            effect_surface.fill((255, 215, 0))
-            
-            screen.blit(effect_surface, (attack['rect'].x - camera_x, attack['rect'].y - camera_y))
+        # Efectos de ataque cuerpo a cuerpo eliminados para mejor visibilidad

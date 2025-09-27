@@ -49,7 +49,7 @@ class ChamanAttack:
         # Propiedades de daño
         self.basic_damage = 25
         self.special_damage = 45
-        self.magic_range = 200  # Alcance de hechizos
+        self.magic_range = 350  # Mayor alcance de hechizos
         
         # URLs de animaciones de ataque desde GitHub
         self.attack_urls = {
@@ -211,11 +211,11 @@ class ChamanAttack:
         elif direction == "up":
             base_angle = 270  # 270 grados
         
-        # Crear 3 proyectiles con dispersión angular
+        # Crear 3 proyectiles con mayor dispersión angular
         angles = [
             base_angle,      # Proyectil central (dirección exacta)
-            base_angle - 45, # Proyectil izquierdo (-45°)
-            base_angle + 45  # Proyectil derecho (+45°)
+            base_angle - 60, # Proyectil izquierdo (-60°)
+            base_angle + 60  # Proyectil derecho (+60°)
         ]
         
         for i, angle in enumerate(angles):

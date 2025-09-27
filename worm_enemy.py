@@ -17,8 +17,8 @@ class WormEnemy:
         self.attack_cooldown = 1500
         self.last_attack_time = 0
         
-        # Escalado de tamaño (25% más grande)
-        self.scale_factor = 1.25
+        # Escalado de tamaño (56% más grande)
+        self.scale_factor = 1.56
         self.width = int(64 * self.scale_factor)
         self.height = int(64 * self.scale_factor)
         
@@ -119,7 +119,7 @@ class WormEnemy:
         except Exception as e:
             print(f"❌ Error cargando animación del gusano: {e}")
             # Crear frame de respaldo en caso de error
-            backup_surface = pygame.Surface((64, 64))
+            backup_surface = pygame.Surface((100, 100))  # 64 * 1.56 = 100
             backup_surface.fill((100, 50, 0))  # Marrón como placeholder
             self.animations = {
                 "up": [backup_surface],
@@ -439,7 +439,7 @@ class WormEnemy:
     
     def get_rect(self):
         """Obtiene rectángulo de colisión"""
-        return pygame.Rect(self.x, self.y, 64, 64)
+        return pygame.Rect(self.x, self.y, 83, 83)  # 64 * 1.3 = 83
 
 class WormSpawner:
     def __init__(self, max_worms=5):
@@ -453,8 +453,8 @@ class WormSpawner:
         """Añade un área donde pueden aparecer gusanos"""
         self.spawn_areas.append((x, y, width, height))
     
-    def spawn_worm(self, players):
-        """Intenta generar un nuevo gusano"""
+    def spawn_worm(self, players, collision_manager=None):
+        """Intenta generar un nuevo gusano verificando bloques de colisión"""
         if len(self.worms) >= self.max_worms:
             return
         
@@ -465,36 +465,50 @@ class WormSpawner:
         if not self.spawn_areas:
             return
         
-        # Elegir área de spawn aleatoria
-        spawn_area = random.choice(self.spawn_areas)
-        spawn_x = random.randint(spawn_area[0], spawn_area[0] + spawn_area[2])
-        spawn_y = random.randint(spawn_area[1], spawn_area[1] + spawn_area[3])
-        
-        # Verificar que no esté muy cerca de los jugadores
-        too_close = False
-        for player in players:
-            distance = math.sqrt((spawn_x - player.x)**2 + (spawn_y - player.y)**2)
-            if distance < 150:
-                too_close = True
-                break
-        
-        if not too_close:
+        # Intentar hasta 10 veces encontrar una posición válida
+        for attempt in range(10):
+            # Elegir área de spawn aleatoria
+            spawn_area = random.choice(self.spawn_areas)
+            spawn_x = random.randint(spawn_area[0], spawn_area[0] + spawn_area[2])
+            spawn_y = random.randint(spawn_area[1], spawn_area[1] + spawn_area[3])
+            
+            # Verificar que no esté muy cerca de los jugadores
+            too_close = False
+            for player in players:
+                distance = math.sqrt((spawn_x - player.x)**2 + (spawn_y - player.y)**2)
+                if distance < 150:
+                    too_close = True
+                    break
+            
+            if too_close:
+                continue
+            
+            # Verificar que no esté bloqueado por bloques de colisión
+            if collision_manager:
+                worm_rect = pygame.Rect(spawn_x, spawn_y, 83, 83)  # 64 * 1.3 = 83
+                if collision_manager.check_collision(worm_rect):
+                    continue  # Intentar otra posición
+            
+            # Posición válida encontrada
             new_worm = WormEnemy(spawn_x, spawn_y)
             self.worms.append(new_worm)
             self.last_spawn_time = current_time
             print(f"🐛 Nuevo gusano apareció en ({spawn_x}, {spawn_y})")
+            return
+        
+        print("⚠️ No se pudo encontrar posición válida para spawn de gusano")
     
-    def update(self, players):
+    def update(self, players, collision_manager=None):
         """Actualiza todos los gusanos"""
+        # Intentar generar nuevos gusanos si es necesario
+        self.spawn_worm(players, collision_manager)
+        
         # Actualizar gusanos existentes
         for worm in self.worms[:]:
             if worm.alive:
                 worm.update(players)
             else:
                 self.worms.remove(worm)
-        
-        # Intentar generar nuevos gusanos
-        self.spawn_worm(players)
     
     def draw(self, screen, camera_x, camera_y):
         """Dibuja todos los gusanos"""
