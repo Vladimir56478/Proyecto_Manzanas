@@ -24,8 +24,8 @@ class Item:
         
         # URLs correctas de los items
         item_urls = {
-            'apple': 'https://github.com/user-attachments/assets/8d98de91-3834-456d-8dac-484029df9a02',
-            'potion': 'https://github.com/user-attachments/assets/5365c2ea-ad1e-4055-8d3b-de1547e10396'
+            'apple': 'assets/items/item_sprite.png',
+            'potion': 'assets/items/item_sprite.png'
         }
         
         try:

@@ -28,9 +28,8 @@ Sistema de combate y hechi            try:
 import pygame
 import math
 import random
-import requests
+import os
 from PIL import Image
-from io import BytesIO
 
 
 class ChamanAttack:
@@ -51,12 +50,12 @@ class ChamanAttack:
         self.special_damage = 45
         self.magic_range = 350  # Mayor alcance de hechizos
         
-        # URLs de animaciones de ataque desde GitHub
+        # URLs de animaciones de ataque desde assets locales
         self.attack_urls = {
-            "right": "https://github.com/user-attachments/assets/bd3f405c-b168-4894-8955-93855cac3d84",
-            "up": "https://github.com/user-attachments/assets/baf8b14a-fb99-42ad-880b-850c66b8d288",
-            "down": "https://github.com/user-attachments/assets/903bf678-94d2-4dca-a74c-bef232c6ca32", 
-            "left": "https://github.com/user-attachments/assets/ef3d6aa1-563d-401b-b7ab-fc87b03fe13c"
+            "right": "assets/characters/chaman/attacks/right.gif",
+            "up": "assets/characters/chaman/attacks/up.gif",
+            "down": "assets/characters/chaman/attacks/down.gif", 
+            "left": "assets/characters/chaman/attacks/left.gif"
         }
         
         # Frames de animación de ataques
@@ -100,20 +99,17 @@ class ChamanAttack:
         print("⚔️ Animaciones de ataque cargadas")
     
     def load_gif_from_url(self, url):
-        """Carga un GIF de ataque desde GitHub"""
+        """Carga un GIF de ataque desde archivo local"""
         try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            
-            gif_data = BytesIO(response.content)
-            pil_gif = Image.open(gif_data)
+            # Cargar desde archivo local
+            gif = Image.open(url)
             
             frames = []
             frame_count = 0
             
             try:
                 while True:
-                    frame_rgba = pil_gif.convert('RGBA')  # RGBA para transparencias
+                    frame_rgba = gif.convert('RGBA')  # RGBA para transparencias
                     frame_rgba = frame_rgba.resize((128, 128), Image.LANCZOS)
                     
                     # Convertir fondo blanco a transparente
@@ -132,7 +128,7 @@ class ChamanAttack:
                     frames.append(pygame_surface)
                     frame_count += 1
                     
-                    pil_gif.seek(pil_gif.tell() + 1)
+                    gif.seek(gif.tell() + 1)
                     
             except EOFError:
                 pass

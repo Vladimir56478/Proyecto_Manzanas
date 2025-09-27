@@ -2,8 +2,7 @@ import pygame
 import math
 import random
 from PIL import Image
-import requests
-from io import BytesIO
+import os
 
 class WormEnemy:
     def __init__(self, x, y):
@@ -41,8 +40,8 @@ class WormEnemy:
         self.animation_speed = 0.15
         self.moving = False
         
-        # URL del GIF de movimiento del gusano desde GitHub Issues
-        self.worm_gif_url = "https://github.com/user-attachments/assets/c275caea-e0a2-4a45-8eb2-a60485090789"
+        # URL del GIF de movimiento del gusano desde archivo local Issues
+        self.worm_gif_url = "assets/enemies/worm/worm gif.gif"
         
         # Diccionario para almacenar los frames de animación
         self.animations = {}
@@ -64,18 +63,14 @@ class WormEnemy:
     
     def load_worm_animation(self):
         """Carga el GIF del gusano y extrae sus frames"""
-        print("Cargando animación del gusano desde GitHub...")
+        print("Cargando animación del gusano desde archivo local...")
         
         try:
-            print(f"📥 Descargando GIF del gusano desde GitHub...")
+            print(f"📥 Cargando GIF del gusano desde archivo local...")
             
-            # Descargar el GIF desde GitHub
-            response = requests.get(self.worm_gif_url, timeout=10)  # Timeout de 10 segundos
-            response.raise_for_status()
-            gif_data = BytesIO(response.content)
-            
-            # Abrir el GIF con PIL
-            gif = Image.open(gif_data)
+            # Descargar el GIF desde archivo local
+            # Cargar desde archivo local
+            gif = Image.open(self.worm_gif_url)
             frames = []
             
             # Extraer todos los frames del GIF
@@ -310,21 +305,39 @@ class WormEnemy:
         self.dropped = True
         drops = []
         
-        # 60% probabilidad de manzana (mejora)
-        if random.random() < 0.6:
+        # Siempre otorga algo de curación (50% de probabilidad)
+        if random.random() < 0.5:
             drops.append({
-                'type': 'apple',
-                'x': self.x + 20,
-                'y': self.y + 20,
+                'type': 'heal',
+                'x': self.x + random.randint(-10, 10),
+                'y': self.y + random.randint(-10, 10),
                 'collected': False
             })
             
-        # 40% probabilidad de poción (escudo)
-        if random.random() < 0.4:
+        # 30% probabilidad de mejora de vida máxima
+        if random.random() < 0.3:
             drops.append({
-                'type': 'potion',
-                'x': self.x + 40,
-                'y': self.y + 40,
+                'type': 'health',
+                'x': self.x + random.randint(-15, 15),
+                'y': self.y + random.randint(-15, 15),
+                'collected': False
+            })
+            
+        # 25% probabilidad de mejora de daño
+        if random.random() < 0.25:
+            drops.append({
+                'type': 'damage',
+                'x': self.x + random.randint(-15, 15),
+                'y': self.y + random.randint(-15, 15),
+                'collected': False
+            })
+            
+        # 20% probabilidad de mejora de velocidad
+        if random.random() < 0.2:
+            drops.append({
+                'type': 'speed',
+                'x': self.x + random.randint(-15, 15),
+                'y': self.y + random.randint(-15, 15),
                 'collected': False
             })
         
@@ -445,38 +458,63 @@ class WormSpawner:
     def __init__(self, max_worms=5):
         self.worms = []
         self.max_worms = max_worms
-        self.spawn_cooldown = 10000  # 10 segundos
+        self.spawn_cooldown = 5000  # 5 segundos base entre spawns
         self.last_spawn_time = 0
         self.spawn_areas = []  # Áreas donde pueden aparecer gusanos
+        self.total_spawned = 0  # Contador de gusanos spawneados
+        
+        # Variables para spawn dinámico
+        self.base_spawn_cooldown = 5000  # 5 segundos base
+        self.min_spawn_cooldown = 3000   # 3 segundos mínimo
+        self.spawn_acceleration = 200    # Reducir 200ms por cada gusano spawneado
     
     def add_spawn_area(self, x, y, width, height):
         """Añade un área donde pueden aparecer gusanos"""
         self.spawn_areas.append((x, y, width, height))
     
     def spawn_worm(self, players, collision_manager=None):
-        """Intenta generar un nuevo gusano verificando bloques de colisión"""
-        if len(self.worms) >= self.max_worms:
+        """Genera gusanos gradualmente alrededor de los personajes, respetando bloques de colisión"""
+        # Verificar si ya hemos spawneado todos los gusanos
+        if self.total_spawned >= self.max_worms:
             return
         
         current_time = pygame.time.get_ticks()
-        if current_time - self.last_spawn_time < self.spawn_cooldown:
+        
+        # Spawn dinámico: se acelera con el tiempo
+        current_cooldown = max(self.min_spawn_cooldown, 
+                             self.base_spawn_cooldown - (self.total_spawned * self.spawn_acceleration))
+        
+        if current_time - self.last_spawn_time < current_cooldown:
             return
         
-        if not self.spawn_areas:
+        if not players:
             return
         
-        # Intentar hasta 10 veces encontrar una posición válida
-        for attempt in range(10):
-            # Elegir área de spawn aleatoria
-            spawn_area = random.choice(self.spawn_areas)
-            spawn_x = random.randint(spawn_area[0], spawn_area[0] + spawn_area[2])
-            spawn_y = random.randint(spawn_area[1], spawn_area[1] + spawn_area[3])
+        # Intentar hasta 20 veces encontrar una posición válida alrededor de los personajes
+        for attempt in range(20):
+            # Elegir un jugador aleatorio como punto de referencia
+            target_player = random.choice(players)
             
-            # Verificar que no esté muy cerca de los jugadores
+            # Generar posición en un radio variable (más lejos para los primeros gusanos)
+            base_distance = 180 - (self.total_spawned * 2)  # Se acercan gradualmente
+            min_distance = max(120, base_distance)
+            max_distance = min_distance + 250
+            
+            angle = random.uniform(0, 2 * math.pi)
+            distance = random.uniform(min_distance, max_distance)
+            
+            spawn_x = int(target_player.x + math.cos(angle) * distance)
+            spawn_y = int(target_player.y + math.sin(angle) * distance)
+            
+            # Asegurar que esté dentro de los límites del mundo
+            spawn_x = max(50, min(spawn_x, 5890))  # Límites del mundo
+            spawn_y = max(50, min(spawn_y, 1030))
+            
+            # Verificar que no esté muy cerca de ningún jugador (mínimo 120px)
             too_close = False
             for player in players:
-                distance = math.sqrt((spawn_x - player.x)**2 + (spawn_y - player.y)**2)
-                if distance < 150:
+                distance_to_player = math.sqrt((spawn_x - player.x)**2 + (spawn_y - player.y)**2)
+                if distance_to_player < 120:
                     too_close = True
                     break
             
@@ -485,22 +523,45 @@ class WormSpawner:
             
             # Verificar que no esté bloqueado por bloques de colisión
             if collision_manager:
-                worm_rect = pygame.Rect(spawn_x, spawn_y, 83, 83)  # 64 * 1.3 = 83
-                if collision_manager.check_collision(worm_rect):
+                worm_rect = pygame.Rect(spawn_x - 40, spawn_y - 40, 83, 83)  # Área del gusano
+                collision_found = False
+                for block in collision_manager.blocks:
+                    if worm_rect.colliderect(block.rect):
+                        collision_found = True
+                        break
+                
+                if collision_found:
                     continue  # Intentar otra posición
+            
+            # Verificar que no esté muy cerca de otros gusanos
+            too_close_to_worm = False
+            for existing_worm in self.worms:
+                distance_to_worm = math.sqrt((spawn_x - existing_worm.x)**2 + (spawn_y - existing_worm.y)**2)
+                if distance_to_worm < 100:  # Mínimo 100px entre gusanos
+                    too_close_to_worm = True
+                    break
+            
+            if too_close_to_worm:
+                continue
             
             # Posición válida encontrada
             new_worm = WormEnemy(spawn_x, spawn_y)
             self.worms.append(new_worm)
             self.last_spawn_time = current_time
-            print(f"🐛 Nuevo gusano apareció en ({spawn_x}, {spawn_y})")
+            self.total_spawned += 1
+            
+            # Calcular tiempo hasta el próximo spawn
+            next_cooldown = max(self.min_spawn_cooldown, 
+                              self.base_spawn_cooldown - ((self.total_spawned) * self.spawn_acceleration))
+            
+            print(f"🐛 Gusano {self.total_spawned}/{self.max_worms} apareció en ({spawn_x}, {spawn_y}) - Próximo en {next_cooldown/1000:.1f}s")
             return
         
         print("⚠️ No se pudo encontrar posición válida para spawn de gusano")
     
     def update(self, players, collision_manager=None):
-        """Actualiza todos los gusanos"""
-        # Intentar generar nuevos gusanos si es necesario
+        """Actualiza todos los gusanos y maneja spawn gradual"""
+        # Intentar generar nuevos gusanos gradualmente
         self.spawn_worm(players, collision_manager)
         
         # Actualizar gusanos existentes

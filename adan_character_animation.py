@@ -1,8 +1,7 @@
 import pygame
 import sys
 from PIL import Image
-import requests
-from io import BytesIO
+import os
 
 class AdanCharacter:
     def __init__(self, x, y):
@@ -12,13 +11,13 @@ class AdanCharacter:
         self.current_direction = "down"
         self.moving = False
         self.animation_frame = 0
-        self.animation_speed = 0.2
+        self.animation_speed = 0.3  # Aumentado de 0.2 para animaciones más fluidas y visibles
         
         self.gif_urls = {
-            "up": "https://github.com/user-attachments/assets/a8b0cb2f-6b0a-460d-aa3e-40a404e02bae",
-            "down": "https://github.com/user-attachments/assets/962334b6-0161-499a-b45d-9537cb82f0ee", 
-            "left": "https://github.com/user-attachments/assets/6fd20d0d-0bce-46e5-ad48-909275503607",
-            "right": "https://github.com/user-attachments/assets/83d3150d-67db-4071-9e46-1f47846f22d0"
+            "up": "assets/characters/adan/animations/up.gif",
+            "down": "assets/characters/adan/animations/down.gif",
+            "left": "assets/characters/adan/animations/left.gif",
+            "right": "assets/characters/adan/animations/right.gif"
         }
         
         self.animations = {}
@@ -32,17 +31,19 @@ class AdanCharacter:
         self.load_animations()
         
     def load_animations(self):
-        print("Cargando animaciones de Adán desde GitHub...")
+        print("Cargando animaciones de Adán desde archivo local...")
         
-        for direction, url in self.gif_urls.items():
+        for direction, file_path in self.gif_urls.items():
             try:
-                print(f"📥 Descargando {direction} desde GitHub...")
+                print(f"📥 Cargando {direction} desde {file_path}...")
                 
-                response = requests.get(url, timeout=10)  # Timeout de 10 segundos
-                response.raise_for_status()
-                gif_data = BytesIO(response.content)
+                # Verificar si el archivo existe
+                if not os.path.exists(file_path):
+                    print(f"⚠️  Archivo no encontrado: {file_path}")
+                    raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
                 
-                gif = Image.open(gif_data)
+                # Cargar desde archivo local
+                gif = Image.open(file_path)
                 frames = []
                 
                 for frame_num in range(gif.n_frames):
@@ -113,24 +114,24 @@ class AdanCharacter:
                 self.animation_frame = 0
             return
         
-        # Control manual normal
+        # Control manual normal - Solo WASD
         if keys_pressed:
-            if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
+            if keys_pressed[pygame.K_w]:
                 self.y -= self.speed
                 self.current_direction = "up"
                 self.moving = True
                 
-            elif keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
+            elif keys_pressed[pygame.K_s]:
                 self.y += self.speed
                 self.current_direction = "down"
                 self.moving = True
                 
-            elif keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
+            elif keys_pressed[pygame.K_a]:
                 self.x -= self.speed
                 self.current_direction = "left"
                 self.moving = True
                 
-            elif keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
+            elif keys_pressed[pygame.K_d]:
                 self.x += self.speed
                 self.current_direction = "right"
                 self.moving = True

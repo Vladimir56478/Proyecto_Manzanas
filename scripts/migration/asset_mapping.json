@@ -1,0 +1,51 @@
+{
+  "juan_character_animation.py": {
+    "https://github.com/user-attachments/assets/9310bb71-1229-4647-b208-b025cced50ec": "assets/characters/juan/animations/up",
+    "https://github.com/user-attachments/assets/507e3015-5213-4134-9564-127d2d0641b7": "assets/characters/juan/animations/down",
+    "https://github.com/user-attachments/assets/acf6de12-85b7-41ea-868c-8bb9f227ddbb": "assets/characters/juan/animations/left",
+    "https://github.com/user-attachments/assets/10059991-1a75-4a92-8e6c-7a8e6b7e7da0": "assets/characters/juan/animations/right"
+  },
+  "juan_attacks.py": {
+    "https://github.com/user-attachments/assets/bcd29b68-808b-4840-a6bb-1691c94581b1": "assets/characters/juan/attacks/up",
+    "https://github.com/user-attachments/assets/dd75fe07-fdbc-44af-b96c-e02d24f1a541": "assets/characters/juan/attacks/down",
+    "https://github.com/user-attachments/assets/dd1ed297-05f1-468b-83fb-266d510595f3": "assets/characters/juan/attacks/left",
+    "https://github.com/user-attachments/assets/e1db84b2-d37d-4bc4-87f8-cce531c51300": "assets/characters/juan/attacks/right"
+  },
+  "adan_character_animation.py": {
+    "https://github.com/user-attachments/assets/a8b0cb2f-6b0a-460d-aa3e-40a404e02bae": "assets/characters/adan/animations/up",
+    "https://github.com/user-attachments/assets/962334b6-0161-499a-b45d-9537cb82f0ee": "assets/characters/adan/animations/down",
+    "https://github.com/user-attachments/assets/6fd20d0d-0bce-46e5-ad48-909275503607": "assets/characters/adan/animations/left",
+    "https://github.com/user-attachments/assets/83d3150d-67db-4071-9e46-1f47846f22d0": "assets/characters/adan/animations/right"
+  },
+  "adan_attacks.py": {
+    "https://github.com/user-attachments/assets/6544be63-1345-4a5a-b4e9-57ec4a18775a": "assets/characters/adan/attacks/up",
+    "https://github.com/user-attachments/assets/cbce589c-03c0-4bc0-a067-1b769b154fbd": "assets/characters/adan/attacks/down",
+    "https://github.com/user-attachments/assets/1b2a5d84-7ef7-4598-ada0-68f21c785b06": "assets/characters/adan/attacks/left",
+    "https://github.com/user-attachments/assets/b1dcab29-5e9f-46aa-87f2-1690c0986e77": "assets/characters/adan/attacks/right"
+  },
+  "chaman_character_animation.py": {
+    "https://github.com/user-attachments/assets/53ca8eb3-4bb1-4148-b38c-7539c9f61c25": "assets/characters/chaman/animations/right",
+    "https://github.com/user-attachments/assets/8ef42a26-0937-401c-9368-6ecedd84a533": "assets/characters/chaman/animations/up",
+    "https://github.com/user-attachments/assets/c86c9214-bc8c-4513-8840-10918e85b05a": "assets/characters/chaman/animations/down",
+    "https://github.com/user-attachments/assets/a4dd4c92-0317-48dc-b592-c7085a08c7e2": "assets/characters/chaman/animations/left"
+  },
+  "chaman_attacks.py": {
+    "https://github.com/user-attachments/assets/bd3f405c-b168-4894-8955-93855cac3d84": "assets/characters/chaman/attacks/right",
+    "https://github.com/user-attachments/assets/baf8b14a-fb99-42ad-880b-850c66b8d288": "assets/characters/chaman/attacks/up",
+    "https://github.com/user-attachments/assets/903bf678-94d2-4dca-a74c-bef232c6ca32": "assets/characters/chaman/attacks/down",
+    "https://github.com/user-attachments/assets/ef3d6aa1-563d-401b-b7ab-fc87b03fe13c": "assets/characters/chaman/attacks/left"
+  },
+  "worm_enemy.py": {
+    "https://github.com/user-attachments/assets/c275caea-e0a2-4a45-8eb2-a60485090789": "assets/enemies/worm/worm gif"
+  },
+  "nivel 1 escenario.py": {
+    "https://github.com/user-attachments/assets/0575a74a-96b6-4c69-b052-ad187ee067d4": "assets/backgrounds/escenario"
+  },
+  "nivel_2.py": {
+    "https://github.com/user-attachments/assets/591f8b6d-7a10-4cb5-ae8a-6997fd21ea65": "assets/backgrounds/background"
+  },
+  "items_system.py": {
+    "https://github.com/user-attachments/assets/8d98de91-3834-456d-8dac-484029df9a02": "assets/items/item_sprite",
+    "https://github.com/user-attachments/assets/5365c2ea-ad1e-4055-8d3b-de1547e10396": "assets/items/item_sprite"
+  }
+}

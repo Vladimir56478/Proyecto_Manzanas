@@ -10,9 +10,8 @@ import sys
 import random
 import math
 import os
+import time
 from PIL import Image
-import requests
-from io import BytesIO
 
 # Importaciones de módulos del juego
 from adan_attacks import AdanAttack
@@ -24,6 +23,7 @@ from juan_attacks import JuanAttack
 from juan_character_animation import JuanCharacter
 from loading_screen import LoadingScreen
 from worm_enemy import WormEnemy, WormSpawner
+from game_data_manager import get_game_data_manager
 
 
 class CollisionBlock:
@@ -54,6 +54,78 @@ class CollisionBlock:
                            (screen_x, screen_y, self.width, self.height), 2)
 
 
+class Drop:
+    """Representa un drop que otorga mejoras al jugador"""
+    def __init__(self, x, y, drop_type):
+        self.x = x
+        self.y = y
+        self.drop_type = drop_type  # 'health', 'damage', 'speed', 'heal'
+        self.width = 24
+        self.height = 24
+        self.collected = False
+        self.spawn_time = time.time()
+        self.duration = 15  # El drop desaparece después de 15 segundos
+        
+        # Colores para cada tipo de drop
+        self.colors = {
+            'health': (255, 100, 100),    # Rojo para vida máxima
+            'damage': (255, 200, 50),     # Amarillo para daño
+            'speed': (100, 255, 100),     # Verde para velocidad
+            'heal': (100, 200, 255)       # Azul para curación
+        }
+        
+    def update(self):
+        """Actualiza el drop y verifica si debe desaparecer"""
+        if time.time() - self.spawn_time > self.duration:
+            return False  # El drop debe ser eliminado
+        return True
+    
+    def draw(self, screen, camera_x, camera_y):
+        """Dibuja el drop en pantalla"""
+        if self.collected:
+            return
+            
+        # Posición en pantalla considerando la cámara
+        screen_x = self.x - camera_x
+        screen_y = self.y - camera_y
+        
+        # Solo dibujar si está visible
+        if -50 < screen_x < screen.get_width() + 50 and -50 < screen_y < screen.get_height() + 50:
+            color = self.colors.get(self.drop_type, (255, 255, 255))
+            
+            # Efecto de brillo/parpadeo
+            import time
+            time_factor = (time.time() - self.spawn_time) * 3
+            alpha = int(200 + 55 * math.sin(time_factor))
+            
+            # Dibujar el drop como un rombo/diamante
+            points = [
+                (screen_x + self.width // 2, screen_y),  # Top
+                (screen_x + self.width, screen_y + self.height // 2),  # Right
+                (screen_x + self.width // 2, screen_y + self.height),  # Bottom
+                (screen_x, screen_y + self.height // 2)  # Left
+            ]
+            pygame.draw.polygon(screen, color, points)
+            pygame.draw.polygon(screen, (255, 255, 255), points, 2)  # Borde blanco
+            
+            # Dibujar símbolo según el tipo
+            font = pygame.font.Font(None, 16)
+            symbols = {
+                'health': '+♥',
+                'damage': '⚔',
+                'speed': '⚡',
+                'heal': '✚'
+            }
+            symbol = symbols.get(self.drop_type, '?')
+            text = font.render(symbol, True, (255, 255, 255))
+            text_rect = text.get_rect(center=(screen_x + self.width // 2, screen_y + self.height // 2))
+            screen.blit(text, text_rect)
+    
+    def get_rect(self):
+        """Obtiene el rectángulo para detección de colisiones"""
+        return pygame.Rect(self.x, self.y, self.width, self.height)
+
+
 class CollisionManager:
     """Maneja las colisiones con bloques invisibles"""
     def __init__(self, world_width=1980, world_height=1080):
@@ -72,6 +144,34 @@ class CollisionManager:
         self.drag_current_x = 0
         self.drag_current_y = 0
         self.is_dragging = False
+        
+        # Sistema de persistencia
+        self.data_manager = get_game_data_manager()
+        self.load_collision_data()
+    
+    def load_collision_data(self):
+        """Carga bloques de colisión desde archivo"""
+        try:
+            collision_data = self.data_manager.load_collision_data()
+            self.blocks = []
+            
+            for block_data in collision_data.get("blocks", []):
+                x = block_data["x"]
+                y = block_data["y"]
+                self.blocks.append(CollisionBlock(x, y, self.block_size, self.block_size))
+            
+            print(f"🧱 Bloques de colisión cargados: {len(self.blocks)} bloques")
+        except Exception as e:
+            print(f"⚠️ Error cargando bloques: {e}")
+            self.blocks = []
+    
+    def save_collision_data(self, silent=True):
+        """Guarda bloques de colisión en archivo"""
+        try:
+            blocks_data = [(block.x, block.y) for block in self.blocks]
+            self.data_manager.save_collision_data(blocks_data, silent)
+        except Exception as e:
+            print(f"❌ Error guardando bloques: {e}")
     
     def add_block(self, x, y):
         """Añade un bloque de colisión y guarda automáticamente"""
@@ -198,25 +298,9 @@ class CollisionManager:
             screen.blit(preview_surface, (grid_start_x, grid_start_y))
             pygame.draw.rect(screen, (0, 255, 0), (grid_start_x, grid_start_y, grid_width, grid_height), 3)
         
-        # Información del editor
-        font = pygame.font.Font(None, 48)
-        editor_info = [
-            "🛠️ MODO EDITOR DE COLISIONES",
-            "Click y arrastra: Crear rectángulo de bloques",
-            "Click simple: Agregar bloque individual",
-            "BACKSPACE: Eliminar bloque en cursor del mouse",
-            f"💾 Bloques guardados: {len(self.blocks)} (Auto-save activo)",
-            "📁 Archivo: collision_data.txt"
-        ]
-        
-        for i, info in enumerate(editor_info):
-            color = (255, 255, 0) if i == 0 else (255, 255, 255)
-            text = font.render(info, True, color)
-            # Fondo semi-transparente para el texto
-            text_bg = pygame.Surface((text.get_width() + 20, text.get_height() + 10), pygame.SRCALPHA)
-            text_bg.fill((0, 0, 0, 180))
-            screen.blit(text_bg, (10, 10 + i * 50))
-            screen.blit(text, (20, 15 + i * 50))
+        # Información del editor - OCULTA pero funcional
+        # Los bloques y cursor se siguen mostrando, pero sin texto de ayuda
+        # para mantener el juego limpio visualmente
     
     def handle_editor_input(self, keys_pressed, keys_just_pressed, mouse_events, camera_x, camera_y):
         """Maneja input del modo editor con sistema de arrastre"""
@@ -341,7 +425,7 @@ class CollisionManager:
 
 
 class Background:
-    """Maneja el fondo del juego con scroll y carga desde GitHub"""
+    """Maneja el fondo del juego con scroll y carga desde archivos locales"""
     
     def __init__(self, image_url):
         self.image_url = image_url
@@ -351,15 +435,13 @@ class Background:
         self.surface = None
         self.load_background(image_url)
         
-    def load_background(self, url):
-        """Carga el fondo desde GitHub respetando las dimensiones originales"""
+    def load_background(self, file_path):
+        """Carga el fondo desde archivo local respetando las dimensiones originales"""
         try:
-            print("📥 Descargando escenario desde GitHub...")
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
+            print(f"📥 Cargando escenario desde archivo local: {file_path}")
             
-            image_data = BytesIO(response.content)
-            pil_image = Image.open(image_data)
+            # Cargar imagen local usando PIL
+            pil_image = Image.open(file_path)
             
             # Información de la imagen original
             original_width, original_height = pil_image.size
@@ -377,7 +459,7 @@ class Background:
             self.surface = pygame.image.fromstring(image_data, pil_image.size, 'RGB')
             self.surface = self.surface.convert()
             
-            print(f"✅ Escenario cargado exitosamente: 1980x1080")
+            print(f"✅ Escenario cargado exitosamente: {original_width}x{original_height}")
             
         except Exception as e:
             print(f"❌ Error cargando escenario: {e}")
@@ -459,11 +541,11 @@ class Game:
         self.loading_screen.start_loading(assets)
         
         # === CARGA DE ESCENARIO ===
-        self.loading_screen.update_progress("Escenario", "Descargando desde GitHub...")
+        self.loading_screen.update_progress("Escenario", "Cargando desde assets locales...")
         self.loading_screen.draw()
         
-        # URL del escenario principal (PNG largo)
-        escenario_url = "https://github.com/user-attachments/assets/0575a74a-96b6-4c69-b052-ad187ee067d4"
+        # Cargar escenario local
+        escenario_url = "assets/backgrounds/escenario.png"
         
         # Cargar solo el escenario principal
         self.background = Background(escenario_url)
@@ -516,12 +598,18 @@ class Game:
             self.active_attack_system = self.adan_attack
             self.inactive_attack_system = self.juan_attack
         
-        # === SISTEMA DE ENEMIGOS (15 GUSANOS) ===
-        self.loading_screen.update_progress("Enemigos", "Creando 15 gusanos...")
+        # === SISTEMA DE ENEMIGOS (25 GUSANOS ÚNICOS) ===
+        self.loading_screen.update_progress("Enemigos", "Preparando 25 gusanos únicos...")
         self.loading_screen.draw()
         
-        self.worm_spawner = WormSpawner(max_worms=15)
+        self.worm_spawner = WormSpawner(max_worms=25)
         self.setup_enemy_spawns()
+        
+        # Estadísticas del juego
+        self.enemies_defeated = 0
+        
+        # === SISTEMA DE DROPS ===
+        self.drops = []  # Lista de drops disponibles para recoger
         
         # === IA Y AUDIO ===
         self.loading_screen.update_progress("IA", "Configurando inteligencia artificial...")
@@ -538,12 +626,19 @@ class Game:
         
         self.audio = get_audio_manager()
         
-        # === ESTADO DEL JUEGO ===
+        # === ESTADO DEL JUEGO Y SISTEMA DE PERSISTENCIA ===
         self.game_over = False
         self.victory = False
-        self.enemies_defeated = 0
-        self.victory_condition = 25  # Derrotar 25 gusanos para desbloquear Nivel 2
+        
+        # Sistema de persistencia de datos del juego
+        self.data_manager = get_game_data_manager()
+        
+        # Estado del juego simplificado (sin conteo de gusanos)
         self.game_paused = False  # Sistema de pausa para editor y menú mejoras
+        
+        # === SISTEMA DE TRANSICIÓN ===
+        self.transition_to_level_2_flag = False
+        self.victory_message = "¡Victoria! Presiona N para ir al Nivel 2"
         
         # === SISTEMA DE COLECCIONABLES ===
         self.dropped_items = []
@@ -601,20 +696,9 @@ class Game:
         print("✅ Nivel 1 inicializado correctamente")
     
     def setup_enemy_spawns(self):
-        """Configura 6 áreas de spawn para los 15 gusanos"""
-        spawn_areas = [
-            (100, 100, 200, 200),    # Esquina superior izquierda
-            (800, 200, 200, 200),    # Centro superior
-            (1400, 100, 200, 200),   # Esquina superior derecha
-            (200, 600, 200, 200),    # Centro izquierda
-            (1200, 600, 200, 200),   # Centro derecha
-            (600, 800, 200, 200),    # Centro inferior
-        ]
-        
-        for x, y, w, h in spawn_areas:
-            self.worm_spawner.add_spawn_area(x, y, w, h)
-        
-        print("✅ 6 áreas de spawn configuradas para 15 gusanos")
+        """Configura spawn dinámico alrededor de los personajes (25 gusanos únicos)"""
+        # No configuramos áreas fijas, el spawn será dinámico alrededor de los personajes
+        print("✅ Sistema de spawn dinámico configurado para 25 gusanos únicos")
     
 
     def create_collectible_images(self):
@@ -681,7 +765,14 @@ class Game:
                         self.collision_manager.save_collision_data(silent=False)
                         print(f"💾 Configuración final guardada: {len(self.collision_manager.blocks)} bloques")
                 elif event.key == pygame.K_r and (self.game_over or self.victory):
+                    # Reiniciar juego (funciona tanto para game over como victoria)
+                    print("🔄 Reintentando nivel...")
                     self.restart_game()
+                elif event.key == pygame.K_m and (self.game_over or self.victory):
+                    # Volver al menú principal
+                    print("🏠 Regresando al menú principal...")
+                    self.return_to_main_menu()
+                    return False
                 elif event.key == pygame.K_n and self.victory:
                     # Ir al Nivel 2
                     print("🌟 Transición al Nivel 2...")
@@ -695,6 +786,12 @@ class Game:
                     self.handle_upgrade_selection(event.key)
                     self.show_upgrade_menu = False
                     self.game_paused = False  # Reanudar juego después de selección
+            elif event.type == pygame.USEREVENT + 1:
+                # Transición automática al nivel 2
+                if self.transition_to_level_2_flag:
+                    print("🎯 Iniciando transición automática al Nivel 2...")
+                    self.launch_level_2()
+                    return False
         
         # Manejo del modo editor - PAUSAR JUEGO
         if self.collision_manager.editor_mode:
@@ -844,8 +941,6 @@ class Game:
                 # La IA está en rango - activar ataque automático
                 fake_keys_dict = {
                     pygame.K_SPACE: True,  # Solo activar SPACE
-                    pygame.K_UP: False, pygame.K_DOWN: False,
-                    pygame.K_LEFT: False, pygame.K_RIGHT: False,
                     pygame.K_w: False, pygame.K_s: False,
                     pygame.K_a: False, pygame.K_d: False
                 }
@@ -888,15 +983,14 @@ class Game:
             if self.upgrade_menu_timer <= 0:
                 self.show_upgrade_menu = False
         
-        # Verificar transición automática al Nivel 2 inmediatamente al llegar a 25 gusanos
-        if not self.game_over and not self.victory and self.enemies_defeated >= self.victory_condition:
-            print("🌟 ¡NIVEL 2 DESBLOQUEADO! Transición automática iniciando...")
-            self.victory = True
-            self.transition_to_level_2_flag = True
-            self.victory_message = "¡Nivel completado! Cargando Nivel 2..."
-        
         # Verificar condiciones de fin
         self.check_game_conditions()
+        
+        # Verificar victoria: todos los gusanos spawneados y eliminados
+        self.check_victory_condition()
+        
+        # Verificar game over: jugador principal muerto
+        self.check_player_death()
     
     def check_worm_attacks(self, players):
         """Verifica ataques de gusanos contra jugadores"""
@@ -917,47 +1011,81 @@ class Game:
                                 worm.last_attack_time = current_time
     
     def process_worm_drops(self):
-        """Procesa drops de gusanos muertos y conteo de derrotas"""
+        """Procesa drops de gusanos muertos y los convierte en objetos Drop"""
         # Procesar gusanos muertos del spawner
         for worm in self.worm_spawner.worms[:]:
-            if not worm.alive and not getattr(worm, 'drop_processed', False):
-                worm.drop_processed = True
-                self.enemies_defeated += 1
+            if not worm.alive and worm.pending_drops:
+                # Obtener los drops del gusano
+                worm_drops = worm.get_and_clear_drops()
                 
-                print(f"💀 Gusano derrotado! Total: {self.enemies_defeated}/{self.victory_condition}")
+                # Convertir cada drop del gusano en un objeto Drop
+                for drop_data in worm_drops:
+                    new_drop = Drop(drop_data['x'], drop_data['y'], drop_data['type'])
+                    self.drops.append(new_drop)
+                    
+                print(f"💎 {len(worm_drops)} drops generados por gusano eliminado")
+        
+        # Actualizar drops existentes y eliminar los expirados
+        self.drops = [drop for drop in self.drops if drop.update()]
+        
+        # Verificar colisiones de drops con jugadores
+        self.check_drop_collection()
+    
+    def check_drop_collection(self):
+        """Verifica si los jugadores han recogido algún drop"""
+        # Rectangulos de colisión para ambos personajes
+        juan_rect = pygame.Rect(self.juan.x, self.juan.y, 64, 64)
+        adan_rect = pygame.Rect(self.adan.x, self.adan.y, 64, 64)
+        
+        # Verificar colisiones con drops
+        for drop in self.drops[:]:
+            if drop.collected:
+                continue
                 
-                # Generar drops con probabilidades altas (90% probabilidad)
-                drop_x = worm.x + random.randint(-40, 40)
-                drop_y = worm.y + random.randint(-40, 40)
+            drop_rect = drop.get_rect()
+            
+            # Verificar colisión con Juan
+            if juan_rect.colliderect(drop_rect) and self.juan.health > 0:
+                self.apply_drop_effect(drop, self.juan)
+                drop.collected = True
+                self.drops.remove(drop)
                 
-                drop_chance = random.random()
-                if drop_chance < 0.90:  # 90% probabilidad de drop
-                    # 60% manzana, 30% poción
-                    if random.random() < 0.667:  # 60/90 = 0.667
-                        # Crear item manzana desde el sistema de items
-                        from items_system import Item
-                        apple_item = Item('apple', drop_x, drop_y)
-                        self.dropped_items.append({
-                            'type': 'apple',
-                            'x': drop_x, 'y': drop_y,
-                            'spawn_time': pygame.time.get_ticks(),
-                            'surface': apple_item.surface
-                        })
-                        print("🍎 Drop: Manzana de poder (URL)")
-                    else:
-                        # Crear item poción desde el sistema de items
-                        from items_system import Item
-                        potion_item = Item('potion', drop_x, drop_y)
-                        self.dropped_items.append({
-                            'type': 'potion',
-                            'x': drop_x, 'y': drop_y,
-                            'spawn_time': pygame.time.get_ticks(),
-                            'surface': potion_item.surface
-                        })
-                        print("🧪 Drop: Poción de escudo (URL)")
-                
-                # Remover el gusano muerto del spawner
-                self.worm_spawner.worms.remove(worm)
+            # Verificar colisión con Adán
+            elif adan_rect.colliderect(drop_rect) and self.adan.health > 0:
+                self.apply_drop_effect(drop, self.adan)
+                drop.collected = True
+                self.drops.remove(drop)
+    
+    def apply_drop_effect(self, drop, character):
+        """Aplica el efecto del drop al personaje"""
+        if drop.drop_type == 'heal':
+            # Curación inmediata
+            old_health = character.health
+            character.health = min(character.max_health, character.health + 15)
+            healing = character.health - old_health
+            print(f"✚ {character.__class__.__name__} se curó {healing} puntos de vida ({character.health}/{character.max_health})")
+            
+        elif drop.drop_type == 'health':
+            # Aumenta vida máxima y cura completamente
+            character.max_health += 10
+            old_health = character.health
+            character.health = character.max_health
+            healing = character.health - old_health
+            print(f"❤️ {character.__class__.__name__} aumentó vida máxima en 10 (+{healing} curación) ({character.health}/{character.max_health})")
+            
+        elif drop.drop_type == 'damage':
+            # Aumenta daño base
+            if hasattr(character, 'base_damage'):
+                character.base_damage += 3
+            else:
+                character.base_damage = character.attack_damage + 3
+                character.attack_damage += 3
+            print(f"⚔️ {character.__class__.__name__} aumentó daño en 3 puntos")
+            
+        elif drop.drop_type == 'speed':
+            # Aumenta velocidad de movimiento
+            character.speed += 0.8
+            print(f"⚡ {character.__class__.__name__} aumentó velocidad en 0.8 ({character.speed})")
     
     def update_collectibles(self):
         """Actualiza coleccionables y colisiones"""
@@ -1022,13 +1150,45 @@ class Game:
     
     def check_game_conditions(self):
         """Verifica condiciones de victoria y derrota"""
-        # La transición automática al Nivel 2 se maneja en el método update()
-        # No necesitamos verificaciones adicionales aquí para la victoria
+        # La transición automática al Nivel 2 se maneja en check_victory_condition()
+        # La muerte del jugador principal se maneja en check_player_death()
         
-        # Derrota: ambos personajes muertos
-        if self.juan.health <= 0 and self.adan.health <= 0:
+        # Derrota: ambos personajes muertos (solo si no se activó game over por jugador principal)
+        if self.juan.health <= 0 and self.adan.health <= 0 and not self.game_over:
             self.game_over = True
             print("💀 GAME OVER - Ambos personajes han caído")
+    
+    def check_victory_condition(self):
+        """Verifica si todos los gusanos han sido spawneados y eliminados"""
+        # Verificar si todos los gusanos han sido spawneados
+        all_spawned = self.worm_spawner.total_spawned >= self.worm_spawner.max_worms
+        
+        # Verificar si no quedan gusanos vivos
+        living_worms = len([worm for worm in self.worm_spawner.worms if worm.alive])
+        
+        # Actualizar estadística de enemigos derrotados
+        self.enemies_defeated = self.worm_spawner.total_spawned - living_worms
+        
+        # Solo verificar victoria si ya se ha spawneado al menos 1 gusano
+        if (all_spawned and living_worms == 0 and self.worm_spawner.total_spawned > 0 
+            and not self.victory and not self.game_over):
+            print("🌟 ¡TODOS LOS GUSANOS ELIMINADOS! Transición automática al Nivel 2...")
+            print(f"🏆 Victoria conseguida: {self.worm_spawner.total_spawned}/{self.worm_spawner.max_worms} gusanos spawneados y eliminados")
+            
+            self.victory = True
+            self.transition_to_level_2_flag = True
+            self.victory_message = "¡Nivel completado! Cargando Nivel 2..."
+            
+            # Transición automática inmediata
+            pygame.time.set_timer(pygame.USEREVENT + 1, 3000)  # 3 segundos para ver el mensaje
+            print("⏰ Transición automática en 3 segundos...")
+    
+    def check_player_death(self):
+        """Verifica si el jugador principal (activo) ha muerto"""
+        if self.active_character.health <= 0 and not self.game_over:
+            self.game_over = True
+            print(f"💀 GAME OVER - {self.active_character.name} (jugador principal) ha muerto")
+            print("🔄 Presiona R para reintentar o ESC para salir")
     
     # === SISTEMA DE MEJORAS ===
     
@@ -1100,16 +1260,21 @@ class Game:
         self.juan.x, self.juan.y = 400, 300
         self.adan.x, self.adan.y = 500, 300
         
-        # Limpiar enemigos
+        # Limpiar enemigos y reiniciar spawner
         self.worm_spawner.worms.clear()
+        self.worm_spawner.total_spawned = 0
+        self.worm_spawner.last_spawn_time = 0
         
         # Reiniciar estado
         self.game_over = False
         self.victory = False
-        self.enemies_defeated = 0
+        self.transition_to_level_2_flag = False
+        
+        # Limpiar items
         self.dropped_items.clear()
         
-        print("🔄 Juego reiniciado")
+        print("🔄 Juego reiniciado - 25 gusanos aparecerán gradualmente")
+        print("🎯 Elimina todos los gusanos para avanzar al Nivel 2")
     
     def launch_level_2(self):
         """Lanza el Nivel 2 del juego"""
@@ -1138,11 +1303,55 @@ class Game:
         # Reinicializar pygame para este nivel si hay error
         pygame.init()
         self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.FULLSCREEN)
+
+    def return_to_main_menu(self):
+        """Regresa al menú principal (intro cinematográfica)"""
+        print("🏠 Cerrando juego y regresando al menú principal...")
+        
+        # Detener música del juego
+        audio_manager = get_audio_manager()
+        audio_manager.stop_music()
+        
+        # Cerrar ventana del juego
+        pygame.quit()
+        
+        # Reiniciar la intro cinematográfica
+        intro = IntroCinematica()
+        result = intro.run()
+        
+        if result and result.startswith('start_game_'):
+            # Extraer personaje seleccionado
+            selected_character = result.split('_')[-1]
+            print(f"🎮 Reiniciando juego con {selected_character.upper()}")
+            
+            # Cerrar ventana de intro
+            pygame.quit()
+            
+            # Crear y ejecutar el nuevo juego
+            game = Game(selected_character)
+            game.run()
+        else:
+            print("👋 Saliendo del juego...")
+            pygame.quit()
+            sys.exit()
     
     # === RENDERIZADO ===
     
     def draw(self):
         """Dibuja todo el juego"""
+        # Pantallas de fin - renderizar SOLO estas sin fondo si están activas
+        if self.game_over:
+            self.screen.fill((0, 0, 0))  # Fondo negro sólido para Game Over
+            self.draw_game_over()
+            pygame.display.flip()
+            return
+        elif self.victory:
+            self.screen.fill((0, 0, 0))  # Fondo negro sólido para Victoria
+            self.draw_victory()
+            pygame.display.flip()
+            return
+        
+        # Renderizado normal del juego solo si NO hay Game Over o Victory
         # Limpiar pantalla
         self.screen.fill((50, 100, 50))
         
@@ -1205,12 +1414,6 @@ class Game:
             self.inactive_ai.is_being_revived):
             self.draw_revival_progress()
         
-        # Pantallas de fin
-        if self.game_over:
-            self.draw_game_over()
-        elif self.victory:
-            self.draw_victory()
-        
         pygame.display.flip()
     
     def draw_shield_effect(self, character):
@@ -1263,9 +1466,10 @@ class Game:
                         (center_x + 15, center_y - 15), (center_x - 15, center_y + 15), 4)
     
     def draw_collectibles(self):
-        """Dibuja manzanas y pociones con URLs reales"""
+        """Dibuja todos los coleccionables: items antiguos y drops nuevos"""
         current_time = pygame.time.get_ticks()
         
+        # Dibujar items del sistema antiguo
         for item in self.dropped_items:
             screen_x = item['x'] - self.camera_x
             screen_y = item['y'] - self.camera_y
@@ -1293,6 +1497,11 @@ class Game:
                 # Efecto de flotación
                 float_offset = int(5 * math.sin(current_time * 0.005 + item['x'] * 0.01))
                 self.screen.blit(temp_surface, (screen_x, screen_y + float_offset))
+        
+        # Dibujar nuevos drops del sistema de mejoras
+        for drop in self.drops:
+            if not drop.collected:
+                drop.draw(self.screen, self.camera_x, self.camera_y)
     
     def draw_ui(self):
         """Dibuja interfaz de usuario mejorada"""
@@ -1300,62 +1509,119 @@ class Game:
         font_small = pygame.font.Font(None, 48)
         font_large = pygame.font.Font(None, 96)  # Para contador de enemigos
         
+        # Mostrar pantalla de victoria si está activa
+        if self.victory:
+            self.draw_victory_screen()
+            return
+        
+        # Mostrar pantalla de game over si está activa
+        if self.game_over:
+            self.draw_game_over_screen()
+            return
+        
+        # UI normal del juego
         # Personaje activo con icono
         active_text = font.render(f"🎮 {self.active_character.name}", True, (255, 255, 255))
         self.screen.blit(active_text, (20, 20))
         
-        # Vidas con barras gráficas
+        # Vidas con barras gráficas y estadísticas mejoradas
         juan_health_text = font_small.render(f"Juan: {self.juan.health}/{self.juan.max_health}", 
                                        True, (255, 255, 255) if self.juan.health > 0 else (255, 100, 100))
         self.screen.blit(juan_health_text, (20, 90))
+        
+        # Estadísticas adicionales de Juan
+        juan_speed = getattr(self.juan, 'speed', 5)
+        juan_damage = getattr(self.juan, 'base_damage', getattr(self.juan, 'attack_damage', 15))
+        juan_stats = font_small.render(f"⚡{juan_speed:.1f} ⚔️{juan_damage}", True, (200, 200, 200))
+        self.screen.blit(juan_stats, (20, 120))
         
         adan_health_text = font_small.render(f"Adán: {self.adan.health}/{self.adan.max_health}", 
                                        True, (255, 255, 255) if self.adan.health > 0 else (255, 100, 100))
         self.screen.blit(adan_health_text, (300, 90))
         
-        # CONTADOR DE ENEMIGOS PROMINENTE
-        # Fondo para el contador
-        counter_bg = pygame.Surface((400, 120), pygame.SRCALPHA)
-        counter_bg.fill((0, 0, 0, 180))
-        self.screen.blit(counter_bg, (self.screen_width - 420, 20))
+        # Estadísticas adicionales de Adán
+        adan_speed = getattr(self.adan, 'speed', 5)
+        adan_damage = getattr(self.adan, 'base_damage', getattr(self.adan, 'attack_damage', 40))
+        adan_stats = font_small.render(f"⚡{adan_speed:.1f} ⚔️{adan_damage}", True, (200, 200, 200))
+        self.screen.blit(adan_stats, (300, 120))
         
-        # Texto del contador con colores dinámicos
-        progress_color = (255, 255, 255)
-        if self.enemies_defeated >= self.victory_condition:
-            progress_color = (100, 255, 100)  # Verde cuando se completa
-        elif self.enemies_defeated >= self.victory_condition * 0.8:
-            progress_color = (255, 255, 100)  # Amarillo cuando está cerca
+        # Mostrar progreso de gusanos (informativo) - posición ajustada
+        living_worms = len([worm for worm in self.worm_spawner.worms if worm.alive])
+        progress_text = font_small.render(f"🐛 Spawneados: {self.worm_spawner.total_spawned}/{self.worm_spawner.max_worms} | Vivos: {living_worms}", 
+                                        True, (200, 200, 200))
+        self.screen.blit(progress_text, (20, 160))
         
-        progress_text = font_large.render(f"🐛 {self.enemies_defeated}/{self.victory_condition}", 
-                                        True, progress_color)
-        self.screen.blit(progress_text, (self.screen_width - 400, 30))
-        
-        # Texto descriptivo con estado del Nivel 2
-        if self.enemies_defeated >= self.victory_condition:
-            desc_text = font_small.render("¡AUTOMÁTICO AL NIVEL 2!", True, (100, 255, 100))
-            instruction_text = font_small.render("¡Transición iniciando!", True, (200, 255, 200))
-            self.screen.blit(instruction_text, (self.screen_width - 400, 110))
-        else:
-            remaining = self.victory_condition - self.enemies_defeated
-            desc_text = font_small.render(f"Faltan {remaining} para Nivel 2", True, (200, 200, 200))
-        
-        self.screen.blit(desc_text, (self.screen_width - 380, 80))
-        
-        # Estadísticas eliminadas para UI más limpia
-        
-        # Indicador de modo editor
-        if self.collision_manager.editor_mode:
-            editor_text = font_small.render("🛠️ MODO EDITOR ACTIVO (F1 para salir)", True, (255, 255, 0))
-            self.screen.blit(editor_text, (20, 330))
-        else:
-            editor_text = font_small.render("F1 - Activar Modo Editor", True, (200, 200, 200))
-            self.screen.blit(editor_text, (20, 330))
+        # Mostrar número de drops disponibles
+        active_drops = len([drop for drop in self.drops if not drop.collected])
+        if active_drops > 0:
+            drops_text = font_small.render(f"💎 Drops disponibles: {active_drops}", True, (255, 215, 0))
+            self.screen.blit(drops_text, (20, 190))
         
         # Indicador de escudo
         for i, char in enumerate([self.juan, self.adan]):
             if getattr(char, 'shield_active', False):
                 shield_text = font_small.render(f"🛡️ {char.name}", True, (100, 200, 255))
                 self.screen.blit(shield_text, (600 + i * 200, 90))
+    
+    def draw_victory_screen(self):
+        """Dibuja pantalla de victoria"""
+        # Fondo semi-transparente
+        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        overlay.fill((0, 100, 0, 200))  # Verde oscuro
+        self.screen.blit(overlay, (0, 0))
+        
+        font_huge = pygame.font.Font(None, 150)
+        font_large = pygame.font.Font(None, 96)
+        font_medium = pygame.font.Font(None, 72)
+        
+        # Título de victoria
+        title = font_huge.render("🎉 ¡VICTORIA! 🎉", True, (255, 255, 100))
+        title_rect = title.get_rect(center=(self.screen_width//2, 300))
+        self.screen.blit(title, title_rect)
+        
+        # Mensaje
+        msg = font_large.render("¡Todos los gusanos eliminados!", True, (255, 255, 255))
+        msg_rect = msg.get_rect(center=(self.screen_width//2, 450))
+        self.screen.blit(msg, msg_rect)
+        
+        # Estado
+        status = font_medium.render("Cargando Nivel 2...", True, (200, 255, 200))
+        status_rect = status.get_rect(center=(self.screen_width//2, 550))
+        self.screen.blit(status, status_rect)
+    
+    def draw_game_over_screen(self):
+        """Dibuja pantalla de game over"""
+        # Fondo semi-transparente
+        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        overlay.fill((100, 0, 0, 200))  # Rojo oscuro
+        self.screen.blit(overlay, (0, 0))
+        
+        font_huge = pygame.font.Font(None, 150)
+        font_large = pygame.font.Font(None, 96)
+        font_medium = pygame.font.Font(None, 72)
+        
+        # Título de game over
+        title = font_huge.render("💀 GAME OVER 💀", True, (255, 100, 100))
+        title_rect = title.get_rect(center=(self.screen_width//2, 300))
+        self.screen.blit(title, title_rect)
+        
+        # Mensaje
+        msg = font_large.render(f"{self.active_character.name} ha caído", True, (255, 255, 255))
+        msg_rect = msg.get_rect(center=(self.screen_width//2, 450))
+        self.screen.blit(msg, msg_rect)
+        
+        # Opciones
+        restart = font_medium.render("R - Reintentar", True, (200, 255, 200))
+        restart_rect = restart.get_rect(center=(self.screen_width//2, 520))
+        self.screen.blit(restart, restart_rect)
+        
+        menu = font_medium.render("M - Menú Principal", True, (200, 200, 255))
+        menu_rect = menu.get_rect(center=(self.screen_width//2, 580))
+        self.screen.blit(menu, menu_rect)
+        
+        exit_text = font_medium.render("ESC - Salir", True, (255, 200, 200))
+        exit_rect = exit_text.get_rect(center=(self.screen_width//2, 640))
+        self.screen.blit(exit_text, exit_rect)
     
     def draw_upgrade_menu(self):
         """Dibuja menú de mejoras"""
@@ -1372,11 +1638,11 @@ class Game:
         title_rect = title.get_rect(center=(self.screen_width//2, 300))
         self.screen.blit(title, title_rect)
         
-        # Opciones simplificadas
+        # Opciones simplificadas y limpias (sin estadísticas de daño)
         options = [
-            "1 - 🚀 Velocidad de Movimiento (+0.8)",
-            "2 - ⚔️ Daño de Ataque (+8)",
-            "3 - ❤️ Vida Máxima (+25)"
+            "1 - 🚀 Velocidad de Movimiento",
+            "2 - ⚔️ Poder de Ataque",
+            "3 - ❤️ Resistencia Vital"
         ]
         
         # Texto de pausa
@@ -1434,9 +1700,7 @@ class Game:
     
     def draw_game_over(self):
         """Dibuja pantalla de game over"""
-        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 200))
-        self.screen.blit(overlay, (0, 0))
+        # Ya no necesitamos overlay porque tenemos fondo negro sólido
         
         font_large = pygame.font.Font(None, 144)
         font_small = pygame.font.Font(None, 72)
@@ -1446,10 +1710,14 @@ class Game:
         game_over_rect = game_over_text.get_rect(center=(self.screen_width//2, self.screen_height//2 - 100))
         self.screen.blit(game_over_text, game_over_rect)
         
-        # Instrucción
-        restart_text = font_small.render("Presiona R para reiniciar", True, (255, 255, 255))
+        # Instrucciones
+        restart_text = font_small.render("R - Reintentar  |  M - Menú Principal", True, (255, 255, 255))
         restart_rect = restart_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 50))
         self.screen.blit(restart_text, restart_rect)
+        
+        esc_text = font_small.render("ESC - Salir del juego", True, (200, 200, 200))
+        esc_rect = esc_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 100))
+        self.screen.blit(esc_text, esc_rect)
         
         # Estadísticas
         stats_text = font_small.render(f"Gusanos derrotados: {self.enemies_defeated}", True, (200, 200, 200))
@@ -1458,9 +1726,7 @@ class Game:
     
     def draw_victory(self):
         """Dibuja pantalla de victoria"""
-        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 200))
-        self.screen.blit(overlay, (0, 0))
+        # Ya no necesitamos overlay porque tenemos fondo negro sólido
         
         font_large = pygame.font.Font(None, 144)
         font_medium = pygame.font.Font(None, 96)
@@ -1512,7 +1778,7 @@ class Game:
         
         # Opción de reinicio (solo si no hay transición automática)
         if not self.transition_to_level_2_flag:
-            restart_text = font_small.render("R - Reiniciar Nivel 1", True, (200, 200, 200))
+            restart_text = font_small.render("R - Reiniciar  |  M - Menú Principal", True, (200, 200, 200))
             restart_rect = restart_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 150))
             self.screen.blit(restart_text, restart_rect)
     

@@ -51,6 +51,19 @@ class CollisionManager:
         self.drag_current_x = 0
         self.drag_current_y = 0
     
+    def load_collision_blocks(self, filename):
+        """Carga bloques de colisión desde archivo"""
+        try:
+            with open(filename, 'r') as f:
+                for line in f:
+                    x, y = map(int, line.strip().split(','))
+                    self.add_block(x, y)
+            print(f"📂 Cargados {len(self.blocks)} bloques de colisión desde {filename}")
+        except FileNotFoundError:
+            print(f"⚠️ Archivo {filename} no encontrado")
+        except Exception as e:
+            print(f"⚠️ Error cargando colisiones: {e}")
+    
     def add_block(self, x, y):
         block = CollisionBlock(x, y)
         if not any(b.x == x and b.y == y for b in self.blocks):
@@ -69,12 +82,58 @@ class CollisionManager:
         return not self.check_collision(test_rect)
     
     def draw_editor_mode(self, screen, camera_x, camera_y):
+        """Dibuja el modo editor con cursor visual tipo Windows"""
         if not self.editor_mode:
             return
         
+        # Dibujar todos los bloques
         for block in self.blocks:
             block.draw_editor(screen, camera_x, camera_y)
         
+        # CURSOR VISUAL TIPO WINDOWS - Copiado desde nivel 1
+        # Dibujar cursor del editor con mejor feedback visual
+        cursor_screen_x = self.editor_cursor_x - camera_x
+        cursor_screen_y = self.editor_cursor_y - camera_y
+        
+        # Verificar si ya existe un bloque en esta posición
+        block_exists = any(block.x == self.editor_cursor_x and block.y == self.editor_cursor_y 
+                          for block in self.blocks)
+        
+        # Color del cursor: verde si es posición libre, rojo si ocupada
+        cursor_color = (255, 100, 100) if block_exists else (100, 255, 100)
+        border_color = (255, 0, 0) if block_exists else (0, 255, 0)
+        
+        # Fondo semitransparente del cursor
+        cursor_surface = pygame.Surface((self.block_size, self.block_size), pygame.SRCALPHA)
+        cursor_surface.fill((*cursor_color, 120))
+        screen.blit(cursor_surface, (cursor_screen_x, cursor_screen_y))
+        
+        # Borde del cursor con animación
+        import math
+        time_factor = pygame.time.get_ticks() / 200
+        border_width = int(3 + 2 * abs(math.sin(time_factor)))
+        pygame.draw.rect(screen, border_color, 
+                        (cursor_screen_x, cursor_screen_y, self.block_size, self.block_size), 
+                        border_width)
+        
+        # Indicador de acción en el centro del cursor
+        center_x = cursor_screen_x + self.block_size // 2
+        center_y = cursor_screen_y + self.block_size // 2
+        
+        if block_exists:
+            # Símbolo de eliminación (X)
+            pygame.draw.line(screen, (255, 255, 255), 
+                           (center_x - 8, center_y - 8), (center_x + 8, center_y + 8), 3)
+            pygame.draw.line(screen, (255, 255, 255), 
+                           (center_x + 8, center_y - 8), (center_x - 8, center_y + 8), 3)
+        else:
+            # Símbolo de adición (+)
+            pygame.draw.line(screen, (255, 255, 255), 
+                           (center_x - 8, center_y), (center_x + 8, center_y), 3)
+            pygame.draw.line(screen, (255, 255, 255), 
+                           (center_x, center_y - 8), (center_x, center_y + 8), 3)
+        
+        # Información del editor
         font = pygame.font.Font(None, 48)
         editor_info = [
             "🛠️ MODO EDITOR DE COLISIONES - NIVEL 2",
@@ -122,10 +181,10 @@ class Nivel2:
         # Carga directa sin loading screen molesto
         print("🎮 Iniciando Nivel 2 - El Chamán Malvado...")
         
-        # Cargar escenario del nivel 2
+        # Cargar escenario del nivel 2 - CORREGIDO para carga local
         self.background_color = (15, 25, 15)  # Fallback
-        self.background_url = "https://github.com/user-attachments/assets/591f8b6d-7a10-4cb5-ae8a-6997fd21ea65"
-        self.background_image = self.load_background_from_url(self.background_url)
+        self.background_url = "assets/backgrounds/background.png"
+        self.background_image = self.load_background_from_local(self.background_url)
         
         # Configurar dimensiones del mundo basadas en el fondo
         if self.background_image:
@@ -185,7 +244,7 @@ class Nivel2:
         self.scale_chaman_sprites(0.7)
         
         # Cargar gusanos adicionales para mayor dificultad
-        self.worm_spawner = WormSpawner(max_worms=8)  # Menos gusanos para no sobrecargar
+        self.worm_spawner = WormSpawner(max_worms=15)  # 15 gusanos como solicitado
         self.setup_level2_worm_spawns()
         
         # Sistema de audio
@@ -198,6 +257,14 @@ class Nivel2:
         
         # Sistema de colisiones (igual que nivel 1)
         self.collision_manager = CollisionManager(self.world_width, self.world_height)
+        
+        # Cargar bloques de colisión desde archivo (igual que nivel 1)
+        try:
+            self.collision_manager.load_collision_blocks("collision_data.txt")
+            print(f"📂 Bloques de colisión cargados para nivel 2")
+        except Exception as e:
+            print(f"⚠️ Error cargando colisiones nivel 2: {e}")
+            
         self.keys_last_frame = list(pygame.key.get_pressed())  # Para detectar pulsaciones
         self.game_paused = False  # Sistema de pausa para editor
         
@@ -238,28 +305,57 @@ class Nivel2:
         print(f"🤖 IA controlando: {self.inactive_character.name}")
         print(f"👹 Chamán Malvado despertado con {self.chaman.health} HP")
     
-    def load_background_from_url(self, url):
-        """Carga el fondo desde GitHub"""
+    def load_background_from_local(self, file_path):
+        """Carga el fondo desde archivo local - IGUAL QUE NIVEL 1"""
         try:
-            print(f"📥 Descargando fondo del nivel 2...")
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
+            print(f"📥 Cargando fondo del nivel 2 desde archivo local: {file_path}")
             
-            image_data = BytesIO(response.content)
-            pil_image = Image.open(image_data)
+            # Cargar imagen local usando PIL
+            pil_image = Image.open(file_path)
+            
+            # Información de la imagen original
+            original_width, original_height = pil_image.size
+            print(f"📐 Dimensiones originales del fondo nivel 2: {original_width}x{original_height}")
+            
+            # RESPETAR DIMENSIONES ORIGINALES - No redimensionar
+            self.world_width = original_width
+            self.world_height = original_height
+            print(f"✅ Usando dimensiones originales del nivel 2: {self.world_width}x{self.world_height}")
+            
+            # Convertir a formato pygame
             pil_image = pil_image.convert('RGB')
+            image_data = pil_image.tobytes()
             
-            # Convertir a superficie de pygame
-            image_string = pil_image.tobytes()
-            background = pygame.image.fromstring(image_string, pil_image.size, 'RGB')
+            background = pygame.image.fromstring(image_data, pil_image.size, 'RGB')
             background = background.convert()
             
-            print(f"✅ Fondo cargado: {background.get_width()}x{background.get_height()}")
+            print(f"✅ Fondo nivel 2 cargado exitosamente: {original_width}x{original_height}")
             return background
             
         except Exception as e:
-            print(f"❌ Error cargando fondo: {e}")
-            return None
+            print(f"❌ Error cargando fondo nivel 2: {e}")
+            print("🎨 Creando fondo de respaldo para nivel 2...")
+            
+            # Crear fondo de respaldo más oscuro y siniestro para el nivel 2
+            fallback = pygame.Surface((1920, 1080))
+            
+            # Gradiente oscuro para el nivel del Chamán
+            for y in range(1080):
+                darkness_intensity = 20 + (y * 40) // 1080
+                color = (darkness_intensity // 3, darkness_intensity // 2, darkness_intensity // 3)  # Verdoso oscuro
+                pygame.draw.line(fallback, color, (0, y), (1920, y))
+            
+            # Añadir elementos decorativos siniestros
+            import random
+            for _ in range(80):
+                x = random.randint(0, 1920)
+                y = random.randint(0, 1080)
+                size = random.randint(3, 8)
+                darkness = random.randint(5, 15)
+                pygame.draw.circle(fallback, (darkness, darkness//2, darkness), (x, y), size)
+            
+            print("✅ Fondo de respaldo del nivel 2 creado")
+            return fallback
 
     def scale_character_sprites(self, character, scale_factor):
         """Escala todos los sprites de un personaje"""
@@ -521,12 +617,16 @@ class Nivel2:
             # Aplicar límites del mundo
             self.enforce_boundaries(self.active_character)
         
-        # Actualizar IA del personaje inactivo enfocada en el Chamán
+        # Actualizar IA del personaje inactivo contra TODOS los enemigos
         if (self.inactive_character.health > 0 or self.inactive_ai.is_being_revived) and not self.collision_manager.editor_mode:
             old_x, old_y = self.inactive_character.x, self.inactive_character.y
             
-            # La IA se enfoca en el chamán como objetivo principal
-            self.inactive_ai.update([self.chaman])
+            # Obtener todos los enemigos para que la IA pueda atacar a cualquiera
+            worms = self.worm_spawner.get_worms()
+            all_enemies_for_ai = [self.chaman] + worms  # Incluir Chamán y todos los gusanos
+            
+            # La IA ahora puede atacar tanto al chamán como a los gusanos
+            self.inactive_ai.update(all_enemies_for_ai)
             
             ai_animation_state = self.inactive_ai.get_animation_state()
             self.inactive_character.update(keys_pressed=None, ai_controlled=True, ai_direction=ai_animation_state)
@@ -542,8 +642,12 @@ class Nivel2:
         # Actualizar sistema de escudo
         self.update_shield_system()
         
-        # Manejar ataques del personaje activo
-        self.active_attack_system.handle_attack_input(keys_pressed, [self.chaman])
+        # Obtener todos los enemigos del nivel 2
+        worms = self.worm_spawner.get_worms()
+        all_enemies = [self.chaman] + worms  # Incluir Chamán y todos los gusanos
+        
+        # Manejar ataques del personaje activo contra TODOS los enemigos
+        self.active_attack_system.handle_attack_input(keys_pressed, all_enemies)
         
         # Actualizar chamán (IA vs personaje activo)
         players = [self.active_character, self.inactive_character]
@@ -569,9 +673,12 @@ class Nivel2:
         # Limitar cámara a los bordes del mundo
         self.limit_camera()
         
-        # Actualizar sistemas de ataque
-        self.juan_attack.update([self.chaman])
-        self.adan_attack.update([self.chaman])
+        # Actualizar sistemas de ataque contra TODOS los enemigos
+        worms = self.worm_spawner.get_worms()
+        all_enemies = [self.chaman] + worms  # Incluir Chamán y todos los gusanos
+        
+        self.juan_attack.update(all_enemies)
+        self.adan_attack.update(all_enemies)
         
         # Procesar drops simples: gusano muere -> PNG aparece
         self.process_worm_drops()
@@ -612,10 +719,26 @@ class Nivel2:
                 if drop_chance < 0.80:
                     # 50% manzana, 30% poción
                     if random.random() < 0.625:  # 50/80 = 0.625
-                        self.item_manager.add_item('apple', drop_x, drop_y)
+                        # Agregar manzana al sistema simple
+                        self.dropped_items.append({
+                            'type': 'apple',
+                            'x': drop_x,
+                            'y': drop_y,
+                            'image': self.apple_image,
+                            'collected': False,
+                            'drop_time': pygame.time.get_ticks()
+                        })
                         print("🍎 Drop: Manzana de poder (Nivel 2)")
                     else:
-                        self.item_manager.add_item('potion', drop_x, drop_y)
+                        # Agregar poción al sistema simple
+                        self.dropped_items.append({
+                            'type': 'potion',
+                            'x': drop_x,
+                            'y': drop_y,
+                            'image': self.potion_image,
+                            'collected': False,
+                            'drop_time': pygame.time.get_ticks()
+                        })
                         print("🧪 Drop: Poción de escudo (Nivel 2)")
                 
                 # Remover el gusano muerto del spawner
@@ -931,60 +1054,76 @@ class Nivel2:
         self.screen.blit(menu_surface, (menu_x, menu_y))
     
     def draw_ui(self):
-        """Dibuja la interfaz de usuario limpia"""
-        font_large = pygame.font.Font(None, 72)
-        font_medium = pygame.font.Font(None, 48)
-        font_small = pygame.font.Font(None, 36)
+        """Dibuja interfaz de usuario idéntica al nivel 1"""
+        font = pygame.font.Font(None, 72)
+        font_small = pygame.font.Font(None, 48)
+        font_large = pygame.font.Font(None, 96)  # Para contador de enemigos
         
-        # Personaje activo
-        active_text = font_large.render(f"🎮 {self.active_character.name}", True, (255, 255, 255))
+        # UI normal del juego
+        # Personaje activo con icono
+        active_text = font.render(f"🎮 {self.active_character.name}", True, (255, 255, 255))
         self.screen.blit(active_text, (20, 20))
         
-        # Vidas de Juan y Adán en VERDE como solicitado
-        juan_health_text = font_medium.render(f"Juan: {self.juan.health}/{self.juan.max_health}", 
-                                       True, (100, 255, 100))  # VERDE como solicitaste
+        # Vidas con barras gráficas y estadísticas mejoradas - IDÉNTICO AL NIVEL 1
+        juan_health_text = font_small.render(f"Juan: {self.juan.health}/{self.juan.max_health}", 
+                                       True, (255, 255, 255) if self.juan.health > 0 else (255, 100, 100))
         self.screen.blit(juan_health_text, (20, 90))
         
-        adan_health_text = font_medium.render(f"Adán: {self.adan.health}/{self.adan.max_health}", 
-                                       True, (100, 255, 100))  # VERDE como solicitaste
+        # Estadísticas adicionales de Juan
+        juan_speed = getattr(self.juan, 'speed', 5)
+        juan_damage = getattr(self.juan, 'base_damage', getattr(self.juan, 'attack_damage', 15))
+        juan_stats = font_small.render(f"⚡{juan_speed:.1f} ⚔️{juan_damage}", True, (200, 200, 200))
+        self.screen.blit(juan_stats, (20, 120))
+        
+        adan_health_text = font_small.render(f"Adán: {self.adan.health}/{self.adan.max_health}", 
+                                       True, (255, 255, 255) if self.adan.health > 0 else (255, 100, 100))
         self.screen.blit(adan_health_text, (300, 90))
         
-        # Información del chamán
-        chaman_health_percent = int((self.chaman.health / self.chaman.max_health) * 100)
-        if chaman_health_percent > 50:
-            chaman_color = (255, 100, 255)
-        elif chaman_health_percent > 20:
-            chaman_color = (255, 150, 0)
-        else:
-            chaman_color = (255, 0, 0)
+        # Estadísticas adicionales de Adán
+        adan_speed = getattr(self.adan, 'speed', 5)
+        adan_damage = getattr(self.adan, 'base_damage', getattr(self.adan, 'attack_damage', 40))
+        adan_stats = font_small.render(f"⚡{adan_speed:.1f} ⚔️{adan_damage}", True, (200, 200, 200))
+        self.screen.blit(adan_stats, (300, 120))
         
-        chaman_text = font_large.render(f"👹 Chamán: {chaman_health_percent}%", True, chaman_color)
-        chaman_rect = chaman_text.get_rect(topright=(self.screen_width - 30, 30))
-        self.screen.blit(chaman_text, chaman_rect)
+        # Vida del Chamán - AHORA EN NÚMEROS ABSOLUTOS como Juan y Adán
+        chaman_health_text = font_small.render(f"👹 Chamán: {self.chaman.health}/{self.chaman.max_health}", 
+                                        True, (255, 100, 255) if self.chaman.health > 0 else (255, 100, 100))
+        self.screen.blit(chaman_health_text, (600, 90))
         
-        # Estadísticas eliminadas como solicitaste
+        # Estadísticas del Chamán
+        chaman_stats = font_small.render(f"⚡{self.chaman.speed:.1f} ⚔️{self.chaman.damage}", True, (200, 200, 200))
+        self.screen.blit(chaman_stats, (600, 120))
         
-        # Controles
+        # Mostrar progreso de gusanos (informativo) - posición ajustada
+        living_worms = len([worm for worm in self.worm_spawner.worms if worm.alive])
+        progress_text = font_small.render(f"🐛 Spawneados: {self.worm_spawner.total_spawned}/{self.worm_spawner.max_worms} | Vivos: {living_worms}", 
+                                        True, (200, 200, 200))
+        self.screen.blit(progress_text, (20, 160))
+        
+        # Mostrar número de drops disponibles
+        active_drops = len([drop for drop in self.dropped_items if not drop.get('collected', False)])
+        if active_drops > 0:
+            drops_text = font_small.render(f"💎 Drops disponibles: {active_drops}", True, (255, 215, 0))
+            self.screen.blit(drops_text, (20, 190))
+        
+        # Indicador de escudo
+        for i, char in enumerate([self.juan, self.adan]):
+            if getattr(char, 'shield_active', False):
+                shield_text = font_small.render(f"🛡️ {char.name}", True, (100, 200, 255))
+                self.screen.blit(shield_text, (600 + i * 200, 160))
+        
+        # Controles - Simplificados
+        font_small_controls = pygame.font.Font(None, 36)
         controls = [
             "🎮 CONTROLES NIVEL 2:",
-            "WASD/Flechas - Mover",
-            "ESPACIO - Ataque básico",
-            "X - Ataque especial/Proyectil",
-            "TAB - Cambiar personaje",
-            "E - Revivir/Consumir poción",
-            "ESC - Pantalla completa"
+            "WASD - Mover | ESPACIO - Ataque",
+            "TAB - Cambiar | E - Revivir",
+            "ESC - Salir"
         ]
         
         for i, control in enumerate(controls):
-            control_surface = font_small.render(control, True, (255, 255, 255))
-            self.screen.blit(control_surface, (30, self.screen_height - 320 + i * 40))
-        
-        # Estado de escudo
-        if hasattr(self.active_character, 'shield_active') and self.active_character.shield_active:
-            shield_time_left = (self.active_character.shield_duration - self.active_character.shield_timer) // 60
-            shield_text = font_medium.render(f"🛡️ Escudo: {shield_time_left}s", True, (100, 150, 255))
-            shield_rect = shield_text.get_rect(topright=(self.screen_width - 30, 120))
-            self.screen.blit(shield_text, shield_rect)
+            control_surface = font_small_controls.render(control, True, (255, 255, 255))
+            self.screen.blit(control_surface, (30, self.screen_height - 200 + i * 40))
     
     def draw_game_over(self):
         """Dibuja la pantalla de game over"""

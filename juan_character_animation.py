@@ -1,8 +1,7 @@
 import pygame
 import sys
 from PIL import Image
-import requests
-from io import BytesIO
+import os
 
 class JuanCharacter:
     def __init__(self, x, y):
@@ -15,10 +14,10 @@ class JuanCharacter:
         self.animation_speed = 0.2
         
         self.gif_urls = {
-            "up": "https://github.com/user-attachments/assets/9310bb71-1229-4647-b208-b025cced50ec",
-            "down": "https://github.com/user-attachments/assets/507e3015-5213-4134-9564-127d2d0641b7", 
-            "left": "https://github.com/user-attachments/assets/acf6de12-85b7-41ea-868c-8bb9f227ddbb",
-            "right": "https://github.com/user-attachments/assets/10059991-1a75-4a92-8e6c-7a8e6b7e7da0"
+            "up": "assets/characters/juan/animations/up.gif",
+            "down": "assets/characters/juan/animations/down.gif", 
+            "left": "assets/characters/juan/animations/left.gif",
+            "right": "assets/characters/juan/animations/right.gif"
         }
         
         self.animations = {}
@@ -36,10 +35,8 @@ class JuanCharacter:
         
         for direction, url in self.gif_urls.items():
             try:
-                response = requests.get(url)
-                gif_data = BytesIO(response.content)
-                
-                gif = Image.open(gif_data)
+                # Cargar desde archivo local
+                gif = Image.open(url)
                 frames = []
                 
                 for frame_num in range(gif.n_frames):
@@ -111,22 +108,22 @@ class JuanCharacter:
         
         # Control manual con DIRECCIONES INVERTIDAS (restaurado)
         if keys_pressed:
-            if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
+            if keys_pressed[pygame.K_w]:
                 self.y -= self.speed
                 self.current_direction = "down"  # INVERTIDO: era "up"
                 self.moving = True
                 
-            elif keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
+            elif keys_pressed[pygame.K_s]:
                 self.y += self.speed
                 self.current_direction = "up"    # INVERTIDO: era "down"
                 self.moving = True
                 
-            elif keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
+            elif keys_pressed[pygame.K_a]:
                 self.x -= self.speed
                 self.current_direction = "right" # INVERTIDO: era "left"
                 self.moving = True
                 
-            elif keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
+            elif keys_pressed[pygame.K_d]:
                 self.x += self.speed
                 self.current_direction = "left"  # INVERTIDO: era "right"
                 self.moving = True

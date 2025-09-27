@@ -1,8 +1,7 @@
 import pygame
 import math
 from PIL import Image
-import requests
-from io import BytesIO
+import os
 
 class AdanAttack:
     def __init__(self, character):
@@ -20,33 +19,26 @@ class AdanAttack:
         self.attack_damage_pending = None  # Almacena el daño pendiente hasta el final de la animación
         self.attack_enemies_target = []    # Lista de enemigos que serán afectados al final
         
-        # URLs de los GIFs de ataque de Adán desde GitHub Issues
+        # URLs de los GIFs de ataque de Adán desde archivo local Issues
         self.attack_gif_urls = {
-            "up": "https://github.com/user-attachments/assets/6544be63-1345-4a5a-b4e9-57ec4a18775a",
-            "down": "https://github.com/user-attachments/assets/cbce589c-03c0-4bc0-a067-1b769b154fbd", 
-            "left": "https://github.com/user-attachments/assets/1b2a5d84-7ef7-4598-ada0-68f21c785b06",
-            "right": "https://github.com/user-attachments/assets/b1dcab29-5e9f-46aa-87f2-1690c0986e77"
-        }
-        
-        # Diccionario para almacenar los frames de cada dirección de ataque
+            "up": "assets/characters/adan/attacks/up.gif",
+            "down": "assets/characters/adan/attacks/down.gif",
+            "left": "assets/characters/adan/attacks/left.gif",
+            "right": "assets/characters/adan/attacks/right.gif"
+        }        # Diccionario para almacenar los frames de cada dirección de ataque
         self.attack_animations = {}
         self.load_attack_animations()
         
     def load_attack_animations(self):
         """Carga todos los GIFs de ataque y extrae sus frames"""
-        print("🔥 Cargando animaciones de ataque de Adán desde GitHub...")
+        print("🔥 Cargando animaciones de ataque de Adán desde archivo local...")
         
         for direction, url in self.attack_gif_urls.items():
             try:
-                print(f"📥 Descargando ataque {direction} desde GitHub...")
+                print(f"📥 Cargando ataque {direction} desde archivo local...")
                 
-                # Descargar el GIF desde GitHub
-                response = requests.get(url, timeout=10)  # Timeout de 10 segundos
-                response.raise_for_status()
-                gif_data = BytesIO(response.content)
-                
-                # Abrir el GIF con PIL
-                gif = Image.open(gif_data)
+                # Cargar el GIF desde archivo local
+                gif = Image.open(url)
                 frames = []
                 
                 # Extraer todos los frames del GIF
@@ -137,14 +129,14 @@ class AdanAttack:
             # Seguir exactamente la misma lógica que los movimientos de Adán
             direction = "down"  # Dirección por defecto
             
-            # Detectar dirección actual basada en teclas presionadas (igual que movimientos de Adán)
-            if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
+            # Detectar dirección actual basada en teclas presionadas - Solo WASD
+            if keys_pressed[pygame.K_w]:
                 direction = "up"    # Adán no tiene inversión
-            elif keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
+            elif keys_pressed[pygame.K_s]:
                 direction = "down"  # Adán no tiene inversión
-            elif keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
+            elif keys_pressed[pygame.K_a]:
                 direction = "left"  # Adán no tiene inversión
-            elif keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
+            elif keys_pressed[pygame.K_d]:
                 direction = "right" # Adán no tiene inversión
             else:
                 # Si no hay teclas presionadas, usar dirección actual del personaje

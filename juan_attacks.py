@@ -1,8 +1,7 @@
 import pygame
 import math
 from PIL import Image
-import requests
-from io import BytesIO
+import os
 
 class JuanAttack:
     def __init__(self, character):
@@ -22,12 +21,12 @@ class JuanAttack:
         self.attack_damage_pending = None  # Almacena el daño pendiente hasta el final de la animación
         self.attack_enemies_target = []    # Lista de enemigos que serán afectados al final
         
-        # URLs de los GIFs de ataque de Juan desde GitHub Issues (INVERTIDAS)
+        # URLs de los GIFs de ataque de Juan desde assets locales (INVERTIDAS)
         self.attack_gif_urls = {
-            "up": "https://github.com/user-attachments/assets/bcd29b68-808b-4840-a6bb-1691c94581b1",    # Era "down"
-            "down": "https://github.com/user-attachments/assets/dd75fe07-fdbc-44af-b96c-e02d24f1a541",  # Era "up"
-            "left": "https://github.com/user-attachments/assets/dd1ed297-05f1-468b-83fb-266d510595f3",  # Era "right"
-            "right": "https://github.com/user-attachments/assets/e1db84b2-d37d-4bc4-87f8-cce531c51300"  # Era "left"
+            "up": "assets/characters/juan/attacks/up.gif",    # Era "down"
+            "down": "assets/characters/juan/attacks/down.gif",  # Era "up"
+            "left": "assets/characters/juan/attacks/left.gif",  # Era "right"
+            "right": "assets/characters/juan/attacks/right.gif"  # Era "left"
         }
         
         # Diccionario para almacenar los frames de cada dirección de ataque
@@ -36,19 +35,14 @@ class JuanAttack:
         
     def load_attack_animations(self):
         """Carga todos los GIFs de ataque y extrae sus frames"""
-        print("⚔️ Cargando animaciones de ataque de Juan desde GitHub...")
+        print("⚔️ Cargando animaciones de ataque de Juan desde archivo local...")
         
         for direction, url in self.attack_gif_urls.items():
             try:
-                print(f"📥 Descargando ataque {direction} desde GitHub...")
+                print(f"📥 Cargando ataque {direction} desde archivo local...")
                 
-                # Descargar el GIF desde GitHub
-                response = requests.get(url, timeout=10)  # Timeout de 10 segundos
-                response.raise_for_status()
-                gif_data = BytesIO(response.content)
-                
-                # Abrir el GIF con PIL
-                gif = Image.open(gif_data)
+                # Cargar el GIF desde archivo local
+                gif = Image.open(url)
                 frames = []
                 
                 # Extraer todos los frames del GIF
@@ -139,14 +133,14 @@ class JuanAttack:
             # Seguir exactamente la misma lógica que los movimientos
             direction = "down"  # Dirección por defecto
             
-            # Control manual con DIRECCIONES INVERTIDAS (restaurado)
-            if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
+            # Control manual con DIRECCIONES INVERTIDAS (restaurado) - Solo WASD
+            if keys_pressed[pygame.K_w]:
                 direction = "down"  # INVERTIDO: era "up"
-            elif keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
+            elif keys_pressed[pygame.K_s]:
                 direction = "up"    # INVERTIDO: era "down"
-            elif keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
+            elif keys_pressed[pygame.K_a]:
                 direction = "right" # INVERTIDO: era "left"
-            elif keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
+            elif keys_pressed[pygame.K_d]:
                 direction = "left"  # INVERTIDO: era "right"
             else:
                 # Si no hay teclas presionadas, usar dirección actual del personaje

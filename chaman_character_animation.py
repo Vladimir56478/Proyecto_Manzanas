@@ -6,9 +6,8 @@ Sistema de animaciones para el jefe final del Nivel 2
 
 import pygame
 import math
-import requests
+import os
 from PIL import Image
-from io import BytesIO
 
 
 class ChamanCharacter:
@@ -35,12 +34,12 @@ class ChamanCharacter:
         self.animation_speed = 0.12  # Animación más lenta y majestuosa
         self.last_frame_time = pygame.time.get_ticks()
         
-        # URLs de animaciones de movimiento desde GitHub
+        # URLs de animaciones de movimiento desde archivo local
         self.movement_urls = {
-            "right": "https://github.com/user-attachments/assets/53ca8eb3-4bb1-4148-b38c-7539c9f61c25",
-            "up": "https://github.com/user-attachments/assets/8ef42a26-0937-401c-9368-6ecedd84a533", 
-            "down": "https://github.com/user-attachments/assets/c86c9214-bc8c-4513-8840-10918e85b05a",
-            "left": "https://github.com/user-attachments/assets/a4dd4c92-0317-48dc-b592-c7085a08c7e2"
+            "right": "assets/characters/chaman/animations/right.gif",
+            "up": "assets/characters/chaman/animations/up.gif", 
+            "down": "assets/characters/chaman/animations/down.gif",
+            "left": "assets/characters/chaman/animations/left.gif"
         }
         
         # Diccionarios para almacenar frames
@@ -78,15 +77,11 @@ class ChamanCharacter:
         print("🎭 Animaciones del Chamán cargadas completamente")
     
     def load_gif_from_url(self, url):
-        """Carga un GIF desde GitHub y extrae sus frames"""
+        """Carga un GIF desde archivo local y extrae sus frames"""
         try:
-            print(f"📥 Descargando animación desde GitHub...")
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            
-            # Abrir GIF con PIL
-            gif_data = BytesIO(response.content)
-            pil_gif = Image.open(gif_data)
+            print(f"📥 Cargando animación desde archivo local...")
+            # Cargar desde archivo local
+            gif = Image.open(url)
             
             frames = []
             frame_count = 0
@@ -94,7 +89,7 @@ class ChamanCharacter:
             try:
                 while True:
                     # Convertir frame a RGBA para manejar transparencia
-                    frame_rgba = pil_gif.convert('RGBA')
+                    frame_rgba = gif.convert('RGBA')
                     
                     # Redimensionar para que sea más imponente (128x128)
                     frame_rgba = frame_rgba.resize((128, 128), Image.LANCZOS)
@@ -117,7 +112,7 @@ class ChamanCharacter:
                     frame_count += 1
                     
                     # Ir al siguiente frame
-                    pil_gif.seek(pil_gif.tell() + 1)
+                    gif.seek(gif.tell() + 1)
                     
             except EOFError:
                 pass  # Fin del GIF
@@ -163,20 +158,20 @@ class ChamanCharacter:
                 self.moving = True
                 self.current_direction = direction
         elif keys_pressed:
-            # Control manual (para pruebas)
-            if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
+            # Control manual (para pruebas) - solo WASD
+            if keys_pressed[pygame.K_w]:
                 self.y -= self.speed
                 self.moving = True
                 self.current_direction = "up"
-            elif keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
+            elif keys_pressed[pygame.K_s]:
                 self.y += self.speed
                 self.moving = True
                 self.current_direction = "down"
-            elif keys_pressed[pygame.K_LEFT] or keys_pressed[pygame.K_a]:
+            elif keys_pressed[pygame.K_a]:
                 self.x -= self.speed
                 self.moving = True
                 self.current_direction = "left"
-            elif keys_pressed[pygame.K_RIGHT] or keys_pressed[pygame.K_d]:
+            elif keys_pressed[pygame.K_d]:
                 self.x += self.speed
                 self.moving = True
                 self.current_direction = "right"

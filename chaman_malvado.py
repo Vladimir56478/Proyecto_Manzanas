@@ -21,9 +21,9 @@ class ChamanMalvado:
         
         self.state = "idle"
         self.target = None
-        self.detection_range = 700  # Aún más lejos
-        self.attack_range = 500      # Mayor alcance de ataque
-        self.summon_range = 800      # Mayor rango de invocación
+        self.detection_range = 1000  # Aumentado de 700 para mayor agresividad
+        self.attack_range = 650      # Aumentado de 500 para mayor alcance de ataque
+        self.summon_range = 1000     # Aumentado para mayor rango de invocación
         
         self.last_summon_time = 0
         self.summon_cooldown = 15000
