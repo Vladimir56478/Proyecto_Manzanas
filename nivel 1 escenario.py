@@ -354,22 +354,22 @@ class Game:
         self.loading_screen.draw()
         
         self.juan = JuanCharacter(400, 300)
-        self.juan.max_health = 120  # Aumento de vida
-        self.juan.health = 120
-        self.juan.speed = 5  # Velocidad mejorada
-        self.juan.damage = 25  # Daño base
-        self.juan.attack_speed = 1.0  # Velocidad de ataque
+        self.juan.max_health = 100  # Menos vida que Adán
+        self.juan.health = 100
+        self.juan.speed = 6.5  # Más velocidad que Adán
+        self.juan.damage = 22  # Menos daño que Adán
+        self.juan.attack_speed = 1.0  # Velocidad de ataque estándar
         self.juan.name = "Juan"
         
         self.loading_screen.update_progress("Personajes", "Cargando Adán...")
         self.loading_screen.draw()
         
         self.adan = AdanCharacter(500, 300)
-        self.adan.max_health = 110  # Vida balanceada
-        self.adan.health = 110
-        self.adan.speed = 6  # Más velocidad que Juan
-        self.adan.damage = 30  # Más daño que Juan
-        self.adan.attack_speed = 0.8  # Ataques más rápidos
+        self.adan.max_health = 125  # Más vida que Juan
+        self.adan.health = 125
+        self.adan.speed = 5.5  # Menos velocidad que Juan
+        self.adan.damage = 28  # Más daño que Juan
+        self.adan.attack_speed = 0.8  # Ataques más lentos pero potentes
         self.adan.name = "Adán"
         
         # === SISTEMAS DE ATAQUE ===
@@ -512,7 +512,10 @@ class Game:
         # Detectar teclas presionadas este frame
         keys_just_pressed = {}
         for key in range(512):  # Cubrir todas las teclas
-            keys_just_pressed[key] = keys_pressed[key] and not self.keys_last_frame[key]
+            if key < len(keys_pressed) and key < len(self.keys_last_frame):
+                keys_just_pressed[key] = keys_pressed[key] and not self.keys_last_frame[key]
+            else:
+                keys_just_pressed[key] = False
         
         # Convertir a lista para poder usar copy()
         self.keys_last_frame = list(keys_pressed)
@@ -702,10 +705,8 @@ class Game:
                         
                 if self.inactive_character == self.juan:
                     self.juan_attack.handle_attack_input(FakeKeys(), worms)
-                    print(f"🎯 Juan (IA) ejecutando ataque automático contra enemigo a {int(target_distance)}px")
                 else:
                     self.adan_attack.handle_attack_input(FakeKeys(), worms)
-                    print(f"🔥 Adán (IA) ejecutando ataque automático contra enemigo a {int(target_distance)}px")
         
         # Actualizar sistemas de ataque
         self.juan_attack.update(worms)
@@ -1008,9 +1009,7 @@ class Game:
                 self.draw_shield_effect(self.active_character)
         
         # Mostrar indicador de combate de IA (exacto como nivel 2)
-        if (hasattr(self.inactive_ai, 'current_state') and 
-            self.inactive_ai.current_state == 'attack'):
-            self.draw_ai_combat_indicator()
+        # ELIMINADO - Sin indicadores visuales de IA
         
         # EXACTAMENTE COMO EN NIVEL 2: Dibujar efectos de ataque
         self.juan_attack.draw(self.screen, self.camera_x, self.camera_y)
@@ -1049,27 +1048,6 @@ class Game:
             self.draw_victory()
         
         pygame.display.flip()
-    
-    def draw_ai_combat_indicator(self):
-        """Dibuja indicador visual cuando la IA está en combate"""
-        if not hasattr(self, 'inactive_ai'):
-            return
-            
-        # Dibujar indicador de combate sobre el personaje IA
-        indicator_x = int(self.inactive_character.x - self.camera_x + 32)
-        indicator_y = int(self.inactive_character.y - self.camera_y - 20)
-        
-        # Círculo pulsante rojo
-        pulse = 1 + 0.5 * math.sin(pygame.time.get_ticks() * 0.01)
-        radius = int(8 * pulse)
-        pygame.draw.circle(self.screen, (255, 0, 0), (indicator_x, indicator_y), radius)
-        pygame.draw.circle(self.screen, (255, 100, 100), (indicator_x, indicator_y), max(1, radius-2))
-        
-        # Texto "IA"
-        font = pygame.font.Font(None, 24)
-        ai_text = font.render("IA", True, (255, 255, 255))
-        ai_rect = ai_text.get_rect(center=(indicator_x, indicator_y-25))
-        self.screen.blit(ai_text, ai_rect)
     
     def draw_shield_effect(self, character):
         """Dibuja efecto visual de escudo mejorado"""

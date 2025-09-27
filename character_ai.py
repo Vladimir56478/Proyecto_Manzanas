@@ -57,7 +57,6 @@ class CharacterAI:
                 self.is_being_revived = False
                 self.revival_timer = 0
                 self.current_state = self.STATE_FOLLOW
-                print(f"✨ {self.character.name} ha sido revivido con {self.character.health} HP!")
             return
         
         # Incrementar contadores y actualizar timers
@@ -163,7 +162,6 @@ class CharacterAI:
         
         # Si está fuera del rango óptimo de ataque, moverse para posicionarse
         if dist_to_enemy > self.attack_range * 0.8:
-            print(f"� {self.character.name} posicionándose para atacar (distancia: {dist_to_enemy:.1f})")
             self.move_towards(self.current_target.x, self.current_target.y)
             self.is_attacking = False
         else:
@@ -243,27 +241,23 @@ class CharacterAI:
             else:
                 base_attack_direction = "down" if dy > 0 else "up"
             
-            # CORRECCIÓN ESPECÍFICA PARA JUAN IA - INVERTIR ATAQUES
+            # SISTEMA CORREGIDO PARA JUAN IA - Sin doble inversión
+            # La IA calcula la dirección correcta hacia el enemigo
+            # El sistema de áreas de Juan ya maneja la inversión para control manual
+            # Por tanto, para IA necesitamos usar la dirección DIRECTA calculada
+            
             if hasattr(self.character, 'name') and self.character.name == "Juan":
-                # Juan IA necesita direcciones invertidas para atacar correctamente
-                direction_map = {
-                    "up": "down",     # Enemigo arriba -> atacar con GIF "down" 
-                    "down": "up",     # Enemigo abajo -> atacar con GIF "up"
-                    "left": "right",  # Enemigo izquierda -> atacar con GIF "right"
-                    "right": "left"   # Enemigo derecha -> atacar con GIF "left"
-                }
-                attack_direction = direction_map.get(base_attack_direction, base_attack_direction)
-                print(f"🎯 Juan IA: Enemigo en {base_attack_direction} -> Atacando con GIF {attack_direction}")
+                # Para Juan IA: usar dirección directa hacia el enemigo
+                # El sistema de áreas ya está invertido, así que esto se cancela correctamente
+                attack_direction = base_attack_direction
+                print(f"🎯 Juan IA ataca hacia {attack_direction} (enemigo en {base_attack_direction})")
             else:
                 # Adán usa direcciones normales
                 attack_direction = base_attack_direction
-                print(f"🎯 {self.character.name} IA: Atacando hacia {attack_direction}")
             
             # Iniciar animación de ataque real
             if hasattr(self.character, 'start_ai_attack'):
                 attack_started = self.character.start_ai_attack(attack_direction)
-                if attack_started:
-                    print(f"🎨 {self.character.name} (IA) iniciando animación de ataque hacia {attack_direction}")
             
             # Simular daño usando el sistema de ataques real
             if hasattr(self.character, 'attacks'):
@@ -272,13 +266,12 @@ class CharacterAI:
                 
                 # Usar el sistema de ataques del personaje
                 if hasattr(self.character.attacks, 'prepare_combo_attack'):
-                    # Para Juan - sistema de combos con dirección corregida
+                    # Para Juan - sistema de combos con dirección corregida (MARCAR COMO IA)
                     self.character.attacks.attack_direction = attack_direction
-                    hit_result = self.character.attacks.prepare_combo_attack(enemies_list)
+                    hit_result = self.character.attacks.prepare_combo_attack(enemies_list, from_ai=True)
                     if hit_result:
                         # Aplicar daño inmediatamente para IA
                         self.character.attacks.apply_pending_damage()
-                        print(f"⚔️ {self.character.name} (IA) ejecutó combo attack hacia {attack_direction}")
                         
                 elif hasattr(self.character.attacks, 'prepare_melee_attack'):
                     # Para Adán - ataque cuerpo a cuerpo
@@ -287,7 +280,6 @@ class CharacterAI:
                     if hit_result:
                         # Aplicar daño inmediatamente para IA
                         self.character.attacks.apply_pending_damage()
-                        print(f"🔥 {self.character.name} (IA) ejecutó melee attack")
             else:
                 # Fallback: daño simple si no hay sistema de ataques
                 damage = random.randint(15, 25)
@@ -295,16 +287,12 @@ class CharacterAI:
                     self.current_target.health -= damage
                     if self.current_target.health <= 0:
                         self.current_target.alive = False
-                        print(f"💀 {self.character.name} derrotó a un enemigo!")
-                    else:
-                        print(f"⚔️ {self.character.name} atacó por {damage} de daño")
     
     def start_revival(self):
         """Inicia el proceso de revivir al personaje"""
         if self.character.health <= 0 and not self.is_being_revived:
             self.is_being_revived = True
             self.revival_timer = 0
-            print(f"🔄 Comenzando a revivir a {self.character.name}...")
             return True
         return False
     
@@ -313,10 +301,7 @@ class CharacterAI:
         actual_damage = int(damage * self.damage_reduction)
         self.character.health = max(0, self.character.health - actual_damage)
         
-        print(f"💢 {self.character.name} (IA) recibió {actual_damage} de daño (reducido de {damage})")
-        
         if self.character.health <= 0:
-            print(f"💀 {self.character.name} ha sido derribado!")
             self.current_state = self.STATE_DOWNED
         
         return actual_damage

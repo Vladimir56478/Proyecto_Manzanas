@@ -15,6 +15,7 @@ from chaman_malvado import ChamanMalvado
 from character_ai import CharacterAI
 from audio_manager import get_audio_manager
 from loading_screen import LoadingScreen
+from items_system import ItemManager
 
 class Nivel2:
     def __init__(self, selected_character='juan'):
@@ -125,27 +126,18 @@ class Nivel2:
         # Sistema de coleccionables mejorado
         self.loading_screen.update_progress("Sistema de Coleccionables", "Preparando recompensas...")
         self.loading_screen.draw()
-        self.dropped_items = []
-        self.apple_image = None
-        self.potion_image = None
-        self.load_collectible_images()
+        self.item_manager = ItemManager()  # Nuevo sistema de items
         
-        # Sistema de mejoras
+        # Variables de compatibilidad para código existente
+        self.show_upgrade_menu = False
+        self.upgrade_menu_timer = 0
         self.upgrades = {
             'speed': 0,
             'damage': 0,
             'attack_speed': 0,
             'health': 0
         }
-        
-        # Sistema de escudo para pociones
-        self.shield_active = False
-        self.shield_timer = 0
-        self.shield_duration = 20 * 60  # 20 segundos a 60 FPS (más duración en nivel 2)
-        
-        # Variables para menú de mejoras
-        self.show_upgrade_menu = False
-        self.upgrade_menu_timer = 0
+        self.shield_duration = 15 * 60  # 15 segundos a 60 FPS
         
         # Límites del escenario (se ajustarán cuando se cargue la imagen real)
         self.world_boundaries = {
@@ -427,11 +419,15 @@ class Nivel2:
         self.juan_attack.update([self.chaman])
         self.adan_attack.update([self.chaman])
         
-        # Procesar drops del chamán (el chamán puede soltar items al recibir daño)
-        self.process_boss_drops()
+        # Actualizar sistema de items (reemplaza update_collectibles)
+        self.item_manager.update([self.active_character, self.inactive_character])
         
-        # Actualizar coleccionables
-        self.update_collectibles()
+        # Manejar entrada del menú de mejoras
+        keys = pygame.key.get_pressed()
+        self.item_manager.handle_upgrade_input(keys, self.active_character)
+        
+        # Procesar drops de gusanos muertos
+        self.process_worm_drops()
         
         # Verificar condición de victoria/derrota
         if self.chaman.health <= 0:
@@ -450,6 +446,19 @@ class Nivel2:
             self.upgrade_menu_timer -= 1
             if self.upgrade_menu_timer <= 0:
                 self.show_upgrade_menu = False
+    
+    def process_worm_drops(self):
+        """Procesa drops de gusanos invocados por el chamán"""
+        if not hasattr(self.chaman, 'summoned_worms'):
+            return
+            
+        for worm in self.chaman.summoned_worms[:]:
+            if not worm.alive and hasattr(worm, 'pending_drops') and worm.pending_drops:
+                # Agregar drops del gusano al sistema de items
+                drops = worm.get_and_clear_drops()
+                for drop in drops:
+                    self.item_manager.add_item(drop['type'], drop['x'], drop['y'])
+                    print(f"🎁 Drop generado: {drop['type']} en ({drop['x']}, {drop['y']})")
     
     def update_shield_system(self):
         """Actualiza el sistema de escudo para ambos personajes"""
@@ -579,8 +588,8 @@ class Nivel2:
         # Dibujar chamán malvado
         self.chaman.draw(self.screen, self.camera_x, self.camera_y)
         
-        # Dibujar coleccionables
-        self.draw_collectibles()
+        # Dibujar sistema de items (reemplaza draw_collectibles)
+        self.item_manager.draw(self.screen, self.camera_x, self.camera_y)
         
         # Dibujar barras de vida
         self.draw_health_bars()
@@ -591,10 +600,6 @@ class Nivel2:
         
         # Dibujar interfaz de usuario
         self.draw_ui()
-        
-        # Dibujar menú de mejoras si está activo
-        if self.show_upgrade_menu:
-            self.draw_upgrade_menu()
         
         # Dibujar estados finales
         if self.game_over:

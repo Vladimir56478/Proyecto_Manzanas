@@ -153,8 +153,7 @@ class IntroCinematica:
         
         self.buttons = {
             'jugar': pygame.Rect(self.screen_width//2 - button_width//2, button_y_start, button_width, button_height),
-            'creditos': pygame.Rect(self.screen_width//2 - button_width//2, button_y_start + button_spacing, button_width, button_height),
-            'salir': pygame.Rect(self.screen_width//2 - button_width//2, button_y_start + (button_spacing * 2), button_width, button_height)
+            'salir': pygame.Rect(self.screen_width//2 - button_width//2, button_y_start + button_spacing, button_width, button_height)
         }
         
         print(f"🎛️ Botones configurados: {button_width}x{button_height} en posición Y={button_y_start}")
@@ -333,8 +332,6 @@ class IntroCinematica:
                         if self.selected_button == 'jugar':
                             self.character_selection = True
                             self.selected_character = 'juan'
-                        elif self.selected_button == 'creditos':
-                            return 'creditos'
                         elif self.selected_button == 'salir':
                             return 'quit'
                 elif self.character_selection:
@@ -445,9 +442,7 @@ class IntroCinematica:
             skip_rect = skip_text.get_rect(center=(self.screen_width//2, self.screen_height - int(50 * self.scale_factor)))
             self.screen.blit(skip_text, skip_rect)
         
-        # Indicador de narrador activo
-        if self.narrator_playing:
-            self.draw_narrator_indicator()
+        # Indicador de historia removido para interfaz más limpia
         
         # Mostrar información de sincronización (solo para debug - comentar para versión final)
         # if self.narrator_playing and self.narrator_start_time:
@@ -456,20 +451,10 @@ class IntroCinematica:
         #     debug_text = debug_font.render(f"Tiempo: {elapsed:.1f}s | Fragmento: {self.current_fragment}", True, (100, 100, 100))
         #     self.screen.blit(debug_text, (10, self.screen_height - 30))
     
-    def draw_narrator_indicator(self):
-        """Dibuja un indicador visual simplificado de la historia"""
-        # Fondo simple y elegante
-        indicator_rect = pygame.Rect(20, 20, 250, 50)
-        temp_surface = pygame.Surface((indicator_rect.width, indicator_rect.height), pygame.SRCALPHA)
-        pygame.draw.rect(temp_surface, (0, 0, 0, 120), (0, 0, indicator_rect.width, indicator_rect.height))
-        pygame.draw.rect(temp_surface, (255, 215, 0, 180), (0, 0, indicator_rect.width, indicator_rect.height), 2)
-        self.screen.blit(temp_surface, indicator_rect.topleft)
-        
-        # Texto simple y limpio
-        font = pygame.font.Font(None, 42)
-        story_text = font.render("📖 Historia en progreso...", True, (255, 255, 255))
-        text_rect = story_text.get_rect(center=(indicator_rect.x + indicator_rect.width//2, indicator_rect.y + indicator_rect.height//2))
-        self.screen.blit(story_text, text_rect)
+    # Función eliminada - draw_narrator_indicator no es necesaria
+    # def draw_narrator_indicator(self):
+    #     """Función removida para interface más limpia"""
+    #     pass
     
     def draw_menu(self):
         """Dibuja el menú principal con elementos escalados"""
@@ -499,10 +484,10 @@ class IntroCinematica:
             text_rect = text_surface.get_rect(center=button_rect.center)
             self.screen.blit(text_surface, text_rect)
         
-        # Instrucciones con posición escalada
+        # Instrucciones con posición escalada más arriba y mayor espaciado
         instructions = ["↑↓ - Navegar", "ENTER - Seleccionar"]
-        instructions_y = int(620 * self.scale_factor)
-        instruction_spacing = int(30 * self.scale_factor)
+        instructions_y = int(500 * self.scale_factor)
+        instruction_spacing = int(50 * self.scale_factor)  # Aumentado de 30 a 50
         for i, instruction in enumerate(instructions):
             text_surface = self.text_font.render(instruction, True, (180, 180, 180))
             text_rect = text_surface.get_rect(center=(self.screen_width//2, instructions_y + i * instruction_spacing))
@@ -534,7 +519,7 @@ class IntroCinematica:
             {
                 'name': 'adan', 
                 'display': 'ADÁN',
-                'line1': 'Gerrero Cuerpo a Cuerpo',
+                'line1': 'Guerrero Cuerpo a Cuerpo',
                 'line2': 'Fuerte',
                 'emoji': '🏹'
             }

@@ -25,6 +25,7 @@ class WormEnemy:
         # Marcador para drops (evitar drops múltiples)
         self.dropped = False
         self.alive = True
+        self.pending_drops = []  # Para almacenar drops pendientes
         
         # Estados de IA
         self.state = "patrol"  # patrol, chase, attack, hurt
@@ -298,7 +299,42 @@ class WormEnemy:
         
         if self.health <= 0:
             self.alive = False
-            print("💀 Gusano eliminado (+drops posibles)")
+            self.pending_drops = self.drop_items()  # Guardar drops generados
+            print("💀 Gusano eliminado (+drops generados)")
+    
+    def drop_items(self):
+        """Genera drops cuando el gusano muere"""
+        if self.dropped:  # Evitar drops múltiples
+            return []
+            
+        self.dropped = True
+        drops = []
+        
+        # 60% probabilidad de manzana (mejora)
+        if random.random() < 0.6:
+            drops.append({
+                'type': 'apple',
+                'x': self.x + 20,
+                'y': self.y + 20,
+                'collected': False
+            })
+            
+        # 40% probabilidad de poción (escudo)
+        if random.random() < 0.4:
+            drops.append({
+                'type': 'potion',
+                'x': self.x + 40,
+                'y': self.y + 40,
+                'collected': False
+            })
+        
+        return drops
+    
+    def get_and_clear_drops(self):
+        """Obtiene y limpia los drops pendientes"""
+        drops = self.pending_drops[:]
+        self.pending_drops = []
+        return drops
     
     def update(self, players):
         """Actualiza el gusano"""
@@ -399,10 +435,7 @@ class WormEnemy:
             pygame.draw.rect(screen, (0, 255, 0), 
                            (bar_x, bar_y, health_width, bar_height))
         
-        # Indicador de estado (debug)
-        font = pygame.font.Font(None, 20)
-        state_text = font.render(f"{self.state} ({'moving' if self.moving else 'idle'})", True, (255, 255, 255))
-        screen.blit(state_text, (screen_x, screen_y - 30))
+        # Indicador de estado eliminado para mejor apariencia visual
     
     def get_rect(self):
         """Obtiene rectángulo de colisión"""

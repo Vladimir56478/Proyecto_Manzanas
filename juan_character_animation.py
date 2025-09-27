@@ -104,7 +104,7 @@ class JuanCharacter:
                 self.animation_frame = 0
             return
         
-        # Control manual normal - DIRECCIONES INVERTIDAS
+        # Control manual con DIRECCIONES INVERTIDAS (restaurado)
         if keys_pressed:
             if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
                 self.y -= self.speed

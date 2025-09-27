@@ -1,52 +1,50 @@
-# 🍎 **PROYECTO MANZANAS** 🕹️# 🍎 Proyecto Tierra de las Manzanas
+# 🍎 La Tierra de las Manzanas
+*Juego de aventuras desarrollado en Python con Pygame*
 
-*Juego 2D épico en Python con Pygame - Versión Final Optimizada*
+## 🎮 Descripción
+Juego de aventuras con dos héroes únicos que deben liberar la Tierra de las Manzanas de criaturas malvadas.
 
-## 🎮 **Descripción del Juego**
+### 👥 Personajes
+- **Juan** 🏃‍♂️: Veloz pero frágil, controles invertidos especiales
+- **Adán** 💪: Fuerte y resistente, controles estándar
 
-Un emocionante juego de acción 2D donde Juan y Adán luchan contra gusanos en un épico enfrentamiento. Con animaciones fluidas, sistema de combate dinámico, intro cinematográfica inmersiva y **sistema de narrador unificado**.Juego de acción 2D donde controlas a **Adán** y **Juan** en combate contra gusanos enemigos usando animaciones GIF cargadas directamente desde GitHub Issues.
+### 🗺️ Niveles
+1. **Nivel 1**: Batalla contra 15 gusanos gigantes
+2. **Nivel 2**: Enfrentamiento final con el Chamán Malvado
 
-
-
----## 🗂️ **ESQUEMA DEL PROYECTO**
-
-
-
-## 🌟 **CARACTERÍSTICAS PRINCIPALES**```
-
-📁 Proyecto-tierra-de-las-manzanas/
-
-### 🎬 **Intro Cinematográfica Completa**├── 🎮 nivel 1 escenario.py          # Archivo principal del juego
-
-- **Selección de personaje:** Juan vs Adán├── 🎬 intro_cinematica.py           # Intro cinematográfica y selección
-
-- **🎙️ Narrador unificado** con sincronización perfecta├── 📊 loading_screen.py             # Pantalla de carga con progreso
-
-- **🎵 Audio optimizado** (un solo archivo MP3 de 90 segundos)├── � audio_manager.py              # Sistema de gestión de audio
-
-- **⏱️ 24 fragmentos calibrados** con timestamps precisos├── �👤 adan_character_animation.py   # Personaje Adán + animaciones
-
-- **Transiciones automáticas** entre historia y menú├── 👤 juan_character_animation.py   # Personaje Juan + animaciones  
-
-├── ⚔️ adan_attacks.py              # Sistema de ataques de Adán
-
-### ⚔️ **Sistema de Combate Avanzado**├── ⚔️ juan_attacks.py              # Sistema de ataques de Juan
-
-- **Combate en tiempo real** con ataques direccionales├── 🐛 worm_enemy.py                # Enemigos gusano con IA
-
-- **Sistema de combos** para Juan (3 niveles)├── 🧠 character_ai.py              # Inteligencia artificial
-
-- **Ataques especiales** únicos por personaje├── 🎵 sounds/                      # Directorio de archivos de audio
-
-- **Efectos visuales** impactantes└── 📖 README.md                    # Este archivo
-
+## 🚀 Cómo Jugar
+```bash
+python "nivel 1 escenario.py"
 ```
 
-### 🤖 **IA de Enemigos Inteligente**
+### 🎮 Controles
+- **Movimiento**: Flechas o WASD
+- **Ataque básico**: ESPACIO
+- **Ataque especial**: X
+- **Cambiar personaje**: TAB
+- **Revivir compañero**: E (cerca del caído)
+- **Editor de obstáculos**: F1
 
-- **Gusanos con comportamiento** de persecución## 📅 **LÍNEA DE TIEMPO DEL DESARROLLO**
+### 🎯 Mecánicas Especiales
+- **Sistema de IA**: El personaje inactivo lucha automáticamente
+- **Coleccionables**: Manzanas rojas (mejoras) y pociones azules (escudo)
+- **Sistema de revivir**: Los héroes pueden revivirse mutuamente
+- **Controles únicos**: Juan tiene controles invertidos como habilidad especial
 
-- **Spawn automático** balanceado
+## 📁 Archivos Principales
+- `nivel 1 escenario.py` - Primer nivel del juego
+- `nivel_2.py` - Segundo nivel con jefe final
+- `intro_cinematica.py` - Selección de personaje
+- Sistemas de personajes: `juan_*` y `adan_*`
+- `character_ai.py` - Inteligencia artificial
+
+## 📋 Requisitos
+```bash
+pip install pygame pillow requests
+```
+
+---
+*¡Salva la Tierra de las Manzanas y conviértete en leyenda!* 🏆
 
 - **Estados dinámicos:** idle, persiguiendo, atacando### **🕐 FASE 1: Estructura Base (Completada ✅)**
 

@@ -134,7 +134,7 @@ class JuanAttack:
             # Seguir exactamente la misma lógica que los movimientos
             direction = "down"  # Dirección por defecto
             
-            # Detectar dirección actual basada en teclas presionadas (INVERTIDO para control manual)
+            # Control manual con DIRECCIONES INVERTIDAS (restaurado)
             if keys_pressed[pygame.K_UP] or keys_pressed[pygame.K_w]:
                 direction = "down"  # INVERTIDO: era "up"
             elif keys_pressed[pygame.K_DOWN] or keys_pressed[pygame.K_s]:
@@ -157,7 +157,7 @@ class JuanAttack:
         
         return False
         
-    def prepare_combo_attack(self, enemies):
+    def prepare_combo_attack(self, enemies, from_ai=False):
         current_time = pygame.time.get_ticks()
         if current_time - self.last_attack_time < self.attack_cooldown:
             return False
@@ -171,30 +171,39 @@ class JuanAttack:
         # Crear área de ataque direccional - CORREGIDO PARA AMBOS CASOS
         attack_range = int(70 * range_multiplier)
         
-        # Para Juan, las direcciones ya vienen invertidas desde handle_attack_input (control manual) 
-        # o desde character_ai.py (control IA), por lo que necesitamos revertir la inversión 
-        # para que el área de ataque coincida con la dirección real del GIF
+        # SISTEMA DUAL - Diferencia entre control manual (invertido) e IA (directo)
+        # Control manual: teclas invertidas -> dirección invertida -> área compensada (doble inversión = normal)
+        # IA: dirección directa -> área directa hacia el enemigo
         
-        if self.attack_direction == "up":
-            # Juan dice "up" -> GIF "up" se reproduce -> área debe ir hacia ABAJO (donde dice el GIF)
-            attack_rect = pygame.Rect(self.character.x - 20, self.character.y + 32, 104, attack_range)
-        elif self.attack_direction == "down":
-            # Juan dice "down" -> GIF "down" se reproduce -> área debe ir hacia ARRIBA  
-            attack_rect = pygame.Rect(self.character.x - 20, self.character.y - attack_range, 104, attack_range + 32)
-        elif self.attack_direction == "left":
-            # Juan dice "left" -> GIF "left" se reproduce -> área debe ir hacia DERECHA
-            attack_rect = pygame.Rect(self.character.x + 32, self.character.y - 20, attack_range, 104)
-        elif self.attack_direction == "right":
-            # Juan dice "right" -> GIF "right" se reproduce -> área debe ir hacia IZQUIERDA
-            attack_rect = pygame.Rect(self.character.x - attack_range, self.character.y - 20, attack_range + 32, 104)
+        if from_ai:
+            # PARA IA: Áreas directas hacia donde está el enemigo
+            if self.attack_direction == "up":
+                attack_rect = pygame.Rect(self.character.x - 20, self.character.y - attack_range, 104, attack_range + 32)
+            elif self.attack_direction == "down":
+                attack_rect = pygame.Rect(self.character.x - 20, self.character.y + 32, 104, attack_range)
+            elif self.attack_direction == "left":
+                attack_rect = pygame.Rect(self.character.x - attack_range, self.character.y - 20, attack_range + 32, 104)
+            elif self.attack_direction == "right":
+                attack_rect = pygame.Rect(self.character.x + 32, self.character.y - 20, attack_range, 104)
+            else:
+                attack_rect = pygame.Rect(self.character.x - attack_range//2, self.character.y - attack_range//2, attack_range + 64, attack_range + 64)
         else:
-            # Ataque circular por defecto
-            attack_rect = pygame.Rect(
-                self.character.x - attack_range//2, 
-                self.character.y - attack_range//2, 
-                attack_range + 64, 
-                attack_range + 64
-            )
+            # PARA CONTROL MANUAL: Áreas invertidas para compensar teclas invertidas
+            if self.attack_direction == "up":
+                # Control manual: tecla DOWN -> dirección "up" -> área hacia ABAJO (donde presionó)
+                attack_rect = pygame.Rect(self.character.x - 20, self.character.y + 32, 104, attack_range)
+            elif self.attack_direction == "down":
+                # Control manual: tecla UP -> dirección "down" -> área hacia ARRIBA (donde presionó)
+                attack_rect = pygame.Rect(self.character.x - 20, self.character.y - attack_range, 104, attack_range + 32)
+            elif self.attack_direction == "left":
+                # Control manual: tecla RIGHT -> dirección "left" -> área hacia DERECHA (donde presionó)
+                attack_rect = pygame.Rect(self.character.x + 32, self.character.y - 20, attack_range, 104)
+            elif self.attack_direction == "right":
+                # Control manual: tecla LEFT -> dirección "right" -> área hacia IZQUIERDA (donde presionó)
+                attack_rect = pygame.Rect(self.character.x - attack_range, self.character.y - 20, attack_range + 32, 104)
+            else:
+                # Ataque circular por defecto para control manual
+                attack_rect = pygame.Rect(self.character.x - attack_range//2, self.character.y - attack_range//2, attack_range + 64, attack_range + 64)
         
         combo_effect = {
             'rect': attack_rect,
