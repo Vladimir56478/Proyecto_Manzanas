@@ -168,7 +168,8 @@ class JuanAttack:
         range_multiplier = 1 + (self.combo_count * 0.5)
         
         # Crear área de ataque direccional - CORREGIDO PARA AMBOS CASOS
-        attack_range = int(70 * range_multiplier)
+        # Escalar el rango de ataque 1.56x para coincidir con sprites escalados
+        attack_range = int(70 * range_multiplier * 1.56)
         
         # SISTEMA DUAL - Diferencia entre control manual (invertido) e IA (directo)
         # Control manual: teclas invertidas -> dirección invertida -> área compensada (doble inversión = normal)

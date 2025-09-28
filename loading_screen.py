@@ -1,27 +1,33 @@
 import pygame
-import threading
-import queue
-import time
+import math
+
+# Constantes optimizadas
+COLORS = {
+    'BACKGROUND': (15, 15, 25),
+    'TEXT': (255, 255, 255),
+    'TITLE': (255, 215, 0),
+    'PROGRESS': (0, 200, 100),
+    'BAR_BG': (50, 50, 50)
+}
+
+FONT_SIZES = {
+    'TITLE': 48,
+    'TEXT': 28,
+    'SMALL': 24
+}
 
 class LoadingScreen:
-    """Sistema de pantalla de carga con barra de progreso real"""
+    """Sistema de pantalla de carga optimizado"""
     
     def __init__(self, screen):
         self.screen = screen
         self.screen_width = screen.get_width()
         self.screen_height = screen.get_height()
         
-        # Fuentes
-        self.title_font = pygame.font.Font(None, 48)
-        self.text_font = pygame.font.Font(None, 28)
-        self.small_font = pygame.font.Font(None, 24)
-        
-        # Colores
-        self.bg_color = (15, 15, 25)  # Azul muy oscuro
-        self.text_color = (255, 255, 255)
-        self.title_color = (255, 215, 0)  # Dorado
-        self.progress_color = (0, 200, 100)  # Verde
-        self.bar_bg_color = (50, 50, 50)
+        # Fuentes optimizadas
+        self.title_font = pygame.font.Font(None, FONT_SIZES['TITLE'])
+        self.text_font = pygame.font.Font(None, FONT_SIZES['TEXT'])
+        self.small_font = pygame.font.Font(None, FONT_SIZES['SMALL'])
         
         # Estado de carga
         self.assets_to_load = []
@@ -45,8 +51,10 @@ class LoadingScreen:
             "¡Casi listo!"
         ]
         
-        # Para efectos visuales
+        # Para efectos visuales optimizados
         self.angle = 0
+        # Pre-calcular vectores para círculos de carga
+        self.circle_vectors = [pygame.math.Vector2(1, 0).rotate(i * 45) for i in range(8)]
     
     def add_asset(self, name, description):
         """Agrega un asset a la lista de carga"""
@@ -80,7 +88,7 @@ class LoadingScreen:
     def draw(self):
         """Dibuja la pantalla de carga"""
         # Fondo
-        self.screen.fill(self.bg_color)
+        self.screen.fill(COLORS['BACKGROUND'])
         
         # Actualizar efecto visual
         self.angle += 2
@@ -89,46 +97,47 @@ class LoadingScreen:
         center_x = self.screen_width // 2
         center_y = 150
         for i in range(8):
-            angle = self.angle + i * 45
-            x = center_x + 60 * pygame.math.Vector2(1, 0).rotate(angle).x
-            y = center_y + 20 * pygame.math.Vector2(1, 0).rotate(angle).y
-            size = 4 + 2 * abs(pygame.math.Vector2(1, 0).rotate(angle * 2).x)
-            alpha = int(128 + 127 * abs(pygame.math.Vector2(1, 0).rotate(angle * 3).x))
-            color = (255, 215, 0, alpha)
+            vector = self.circle_vectors[i]
+            rotated_vector = vector.rotate(self.angle)
+            x = center_x + 60 * rotated_vector.x
+            y = center_y + 20 * rotated_vector.y
+            size = 4 + 2 * abs(math.sin(math.radians(self.angle + i * 45)))
+            alpha = int(128 + 127 * abs(math.cos(math.radians(self.angle * 3 + i * 45))))
+            color = (*COLORS['TITLE'], alpha)
             temp_surface = pygame.Surface((size * 2, size * 2), pygame.SRCALPHA)
             pygame.draw.circle(temp_surface, color, (size, size), size)
             self.screen.blit(temp_surface, (x - size, y - size))
         
         # Título principal
-        title_text = self.title_font.render("🍎 Cargando Nivel 1", True, self.title_color)
+        title_text = self.title_font.render("🍎 Cargando Nivel 1", True, COLORS['TITLE'])
         title_rect = title_text.get_rect(center=(self.screen_width//2, 220))
         self.screen.blit(title_text, title_rect)
         
         # Mensaje actual
-        message_text = self.text_font.render(self.current_message, True, self.text_color)
+        message_text = self.text_font.render(self.current_message, True, COLORS['TEXT'])
         message_rect = message_text.get_rect(center=(self.screen_width//2, 300))
         self.screen.blit(message_text, message_rect)
         
-        # Barra de progreso
-        bar_width = 500
+        # Barra de progreso responsiva
+        bar_width = min(500, int(self.screen_width * 0.6))  # 60% del ancho de pantalla, máximo 500
         bar_height = 25
         bar_x = (self.screen_width - bar_width) // 2
-        bar_y = 370
+        bar_y = int(self.screen_height * 0.65)  # 65% de la altura de pantalla
         
         # Fondo de la barra
-        pygame.draw.rect(self.screen, self.bar_bg_color, (bar_x, bar_y, bar_width, bar_height))
+        pygame.draw.rect(self.screen, COLORS['BAR_BG'], (bar_x, bar_y, bar_width, bar_height))
         
         # Progreso
         progress_width = int(bar_width * self.progress)
         if progress_width > 0:
-            pygame.draw.rect(self.screen, self.progress_color, (bar_x, bar_y, progress_width, bar_height))
+            pygame.draw.rect(self.screen, COLORS['PROGRESS'], (bar_x, bar_y, progress_width, bar_height))
         
         # Borde de la barra
-        pygame.draw.rect(self.screen, self.text_color, (bar_x, bar_y, bar_width, bar_height), 2)
+        pygame.draw.rect(self.screen, COLORS['TEXT'], (bar_x, bar_y, bar_width, bar_height), 2)
         
         # Porcentaje
         percent = int(self.progress * 100)
-        percent_text = self.text_font.render(f"{percent}%", True, self.text_color)
+        percent_text = self.text_font.render(f"{percent}%", True, COLORS['TEXT'])
         percent_rect = percent_text.get_rect(center=(self.screen_width//2, bar_y + 50))
         self.screen.blit(percent_text, percent_rect)
         

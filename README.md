@@ -1,8 +1,8 @@
 # 🍎 La Tierra de las Manzanas
 
-## 🎮 Juego de Aventuras en Python/Pygame
+## 🎮 Juego de Aventuras en Python/Pygame - OPTIMIZADO v2.0
 
-Un emocionante juego de aventuras donde Juan y Adán luchan contra gusanos enemigos en un mundo mágico.
+Un emocionante juego de aventuras donde Juan y Adán luchan contra gusanos enemigos en un mundo mágico. **Completamente refactorizado y optimizado** con arquitectura modular y eliminación de código duplicado.
 
 ### ✨ Características Principales
 

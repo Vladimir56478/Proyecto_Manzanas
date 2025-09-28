@@ -3,17 +3,20 @@ import random
 import math
 
 class Item:
-    def __init__(self, item_type, x, y):
+    def __init__(self, item_type, x, y, spawn_delay=0):
         self.type = item_type  # 'apple' o 'potion'
         self.x = x
         self.y = y
         self.collected = False
         self.animation_timer = 0
         self.bob_offset = 0
+        self.visible = spawn_delay == 0  # Visible inmediatamente si no hay delay
+        self.spawn_delay = spawn_delay
+        self.spawn_time = pygame.time.get_ticks()
         
-        # Tamaños
-        self.width = 32
-        self.height = 32
+        # Tamaños muy reducidos para mejor rendimiento (FPS)
+        self.width = 16
+        self.height = 16
         
         # Crear visual
         self.surface = self.create_item_surface()
@@ -22,10 +25,10 @@ class Item:
         """Carga la superficie visual del item desde URLs"""
         surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         
-        # URLs correctas de los items
+        # URLs correctas de los items desde GitHub
         item_urls = {
-            'apple': 'assets/items/item_sprite.png',
-            'potion': 'assets/items/item_sprite.png'
+            'apple': 'https://github.com/user-attachments/assets/8d98de91-3834-456d-8dac-484029df9a02',
+            'potion': 'https://github.com/user-attachments/assets/5365c2ea-ad1e-4055-8d3b-de1547e10396'
         }
         
         try:
@@ -60,16 +63,25 @@ class Item:
         return surface
     
     def update(self):
-        """Actualiza la animación del item"""
+        """Actualiza la animación del item y el spawn paulatino"""
         if self.collected:
             return
             
-        self.animation_timer += 0.1
-        self.bob_offset = int(3 * math.sin(self.animation_timer))
+        # Manejo del spawn paulatino
+        if not self.visible and self.spawn_delay > 0:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.spawn_time >= self.spawn_delay:
+                self.visible = True
+                print(f"✨ {self.type.capitalize()} apareció en ({self.x}, {self.y})")
+        
+        # Animación solo si es visible
+        if self.visible:
+            self.animation_timer += 0.1
+            self.bob_offset = int(3 * math.sin(self.animation_timer))
     
     def draw(self, screen, camera_x, camera_y):
-        """Dibuja el item en pantalla"""
-        if self.collected:
+        """Dibuja el item en pantalla solo si es visible y activo"""
+        if self.collected or not self.visible or not getattr(self, 'active', True):
             return
             
         screen_x = self.x - camera_x
@@ -77,11 +89,13 @@ class Item:
         
         # Solo dibujar si está en pantalla
         if -50 < screen_x < screen.get_width() + 50 and -50 < screen_y < screen.get_height() + 50:
-            screen.blit(self.surface, (screen_x, screen_y))
+            # Escalar a 16x16 para mejor FPS
+            scaled_surface = pygame.transform.scale(self.surface, (16, 16))
+            screen.blit(scaled_surface, (screen_x, screen_y))
             
-            # Brillo sutil
+            # Brillo sutil más pequeño
             pygame.draw.circle(screen, (255, 255, 255, 50), 
-                             (screen_x + 16, screen_y + 16), 20, 2)
+                             (screen_x + 8, screen_y + 8), 12, 2)
     
     def get_rect(self):
         """Obtiene el rectángulo de colisión"""
@@ -224,10 +238,39 @@ class ItemManager:
         self.items = []
         self.upgrade_menu = UpgradeMenu()
         self.shield_effect = ShieldEffect()
+        self.setup_level2_items()  # 7 items estáticos para Nivel 2
+    
+    def setup_level2_items(self):
+        """Crea 10 items estáticos para el Nivel 2 con spawn paulatino"""
+        # 10 items total distribuidos por el mapa vertical expandido
+        item_positions = [
+            # 6 Manzanas (mejoras) - posiciones verticales
+            (500, 300, 'apple'),
+            (800, 600, 'apple'),
+            (1200, 900, 'apple'),
+            (600, 1200, 'apple'),
+            (400, 1500, 'apple'),
+            (1000, 200, 'apple'),
+            
+            # 4 Pociones (escudos) - estratégicamente ubicadas
+            (900, 400, 'potion'),
+            (1100, 800, 'potion'),
+            (700, 1000, 'potion'),
+            (1300, 1300, 'potion'),
+        ]
         
-    def add_item(self, item_type, x, y):
+        current_time = pygame.time.get_ticks()
+        
+        for i, (x, y, item_type) in enumerate(item_positions):
+            # Crear item con spawn paulatino: 3 segundos entre cada uno
+            item = Item(item_type, x, y, spawn_delay=i * 3000)
+            self.items.append(item)
+        
+        print(f"✅ {len(self.items)} items configurados para spawn paulatino en Nivel 2")
+        
+    def add_item(self, item_type, x, y, spawn_delay=0):
         """Añade un nuevo item"""
-        item = Item(item_type, x, y)
+        item = Item(item_type, x, y, spawn_delay)
         self.items.append(item)
         
     def add_worm_drops(self, drops):

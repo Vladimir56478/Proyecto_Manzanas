@@ -162,7 +162,8 @@ class AdanAttack:
         self.last_attack_time = current_time
         
         # Crear área de ataque más grande y direccional
-        attack_range = 80
+        # Escalar el rango de ataque 1.56x para coincidir con sprites escalados
+        attack_range = int(80 * 1.56)
         if self.attack_direction == "up":
             attack_rect = pygame.Rect(self.character.x - 20, self.character.y - attack_range, 104, attack_range + 32)
         elif self.attack_direction == "down":

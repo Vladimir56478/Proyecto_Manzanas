@@ -6,6 +6,10 @@ from io import BytesIO
 import math
 import random
 
+# Importar configuración y utilidades
+from config import *
+from utils import *
+
 # Importar clases necesarias
 from adan_character_animation import AdanCharacter
 from juan_character_animation import JuanCharacter
@@ -17,39 +21,27 @@ from audio_manager import get_audio_manager
 from loading_screen import LoadingScreen
 from items_system import ItemManager
 from worm_enemy import WormSpawner  # Agregar gusanos al nivel 2
+from sound_generator import get_sound_generator, play_sound
 
-# Importar sistema de colisiones del nivel 1
-class CollisionBlock:
-    """Bloque invisible de colisión para restringir movimiento"""
-    def __init__(self, x, y, width=32, height=32):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.rect = pygame.Rect(x, y, width, height)
+# Clase de colisión común (movida a utils para evitar duplicación)
+
+class GameLevel2:
+    """Clase principal del juego Nivel 2"""
     
-    def draw_editor(self, screen, camera_x, camera_y):
-        screen_x = self.x - camera_x
-        screen_y = self.y - camera_y
-        pygame.draw.rect(screen, (255, 0, 0, 120), (screen_x, screen_y, self.width, self.height))
-        pygame.draw.rect(screen, (255, 255, 255), (screen_x, screen_y, self.width, self.height), 2)
-
-class CollisionManager:
-    """Maneja las colisiones con bloques invisibles - Igual que nivel 1"""
-    def __init__(self, world_width=1980, world_height=1080):
-        self.blocks = []
-        self.editor_mode = False
-        self.block_size = 32
-        self.world_width = world_width
-        self.world_height = world_height
-        self.editor_cursor_x = 0
-        self.editor_cursor_y = 0
-        self.is_dragging = False
-        self.mouse_pressed = False
-        self.drag_start_x = 0
-        self.drag_start_y = 0
-        self.drag_current_x = 0
-        self.drag_current_y = 0
+    def __init__(self):
+        """Inicializar el nivel 2"""
+        pygame.init()
+        
+        # Configuración de pantalla
+        self.screen_width = SCREEN_WIDTH
+        self.screen_height = SCREEN_HEIGHT
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.FULLSCREEN)
+        pygame.display.set_caption("⚔️ Nivel 2 - Cueva del Chamán")
+        
+        # Usar CollisionManager de utils
+        self.collision_manager = CollisionManager()
+        
+        print("✅ Nivel 2 inicializado correctamente")
     
     def load_collision_blocks(self, filename):
         """Carga bloques de colisión desde archivo"""
@@ -57,8 +49,8 @@ class CollisionManager:
             with open(filename, 'r') as f:
                 for line in f:
                     x, y = map(int, line.strip().split(','))
-                    self.add_block(x, y)
-            print(f"📂 Cargados {len(self.blocks)} bloques de colisión desde {filename}")
+                    self.collision_manager.add_block(x, y)
+            print(f"📂 Cargados bloques de colisión desde {filename}")
         except FileNotFoundError:
             print(f"⚠️ Archivo {filename} no encontrado")
         except Exception as e:
@@ -162,6 +154,65 @@ class CollisionManager:
         
         if keys_just_pressed.get(pygame.K_SPACE, False):
             self.add_block(self.editor_cursor_x, self.editor_cursor_y)
+            self.auto_save()  # Guardado automático
+        
+        if keys_just_pressed.get(pygame.K_BACKSPACE, False):
+            self.remove_block_at(self.editor_cursor_x, self.editor_cursor_y)
+            self.auto_save()  # Guardado automático
+    
+    def add_block(self, x, y):
+        """Añade un bloque de colisión si no existe ya"""
+        # Alinear a la cuadrícula
+        grid_x = (x // self.block_size) * self.block_size
+        grid_y = (y // self.block_size) * self.block_size
+        
+        # Verificar si ya existe un bloque en esta posición
+        for block in self.blocks:
+            if block.x == grid_x and block.y == grid_y:
+                return  # Ya existe un bloque aquí
+        
+        # Crear nuevo bloque
+        new_block = CollisionBlock(grid_x, grid_y, self.block_size, self.block_size)
+        self.blocks.append(new_block)
+        print(f"✅ Bloque añadido en ({grid_x}, {grid_y})")
+    
+    def remove_block_at(self, x, y):
+        """Elimina un bloque en la posición especificada"""
+        # Alinear a la cuadrícula
+        grid_x = (x // self.block_size) * self.block_size
+        grid_y = (y // self.block_size) * self.block_size
+        
+        # Buscar y eliminar bloque
+        for block in self.blocks[:]:
+            if block.x == grid_x and block.y == grid_y:
+                self.blocks.remove(block)
+                print(f"🗑️ Bloque eliminado en ({grid_x}, {grid_y})")
+                return
+    
+    def load_collision_blocks(self, filename):
+        """Carga bloques de colisión desde archivo"""
+        try:
+            with open(filename, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        x, y, w, h = map(int, line.strip().split(','))
+                        self.blocks.append(CollisionBlock(x, y, w, h))
+            print(f"📂 {len(self.blocks)} bloques cargados desde {filename}")
+        except FileNotFoundError:
+            print(f"📂 Archivo {filename} no encontrado, empezando sin bloques")
+        except Exception as e:
+            print(f"❌ Error cargando bloques: {e}")
+    
+    def auto_save(self):
+        """Guarda automáticamente los bloques de colisión"""
+        filename = "collision_data_nivel2.txt"  # Archivo específico para Nivel 2
+        try:
+            with open(filename, 'w') as f:
+                for block in self.blocks:
+                    f.write(f"{block.x},{block.y},{block.width},{block.height}\n")
+            print(f"💾 Guardado automático: {len(self.blocks)} bloques en {filename}")
+        except Exception as e:
+            print(f"❌ Error en guardado automático: {e}")
 
 class Nivel2:
     def __init__(self, selected_character='juan'):
@@ -181,18 +232,20 @@ class Nivel2:
         # Carga directa sin loading screen molesto
         print("🎮 Iniciando Nivel 2 - El Chamán Malvado...")
         
-        # Cargar escenario del nivel 2 - CORREGIDO para carga local
+        # Cargar escenario completo del nivel 2 desde GitHub
         self.background_color = (15, 25, 15)  # Fallback
-        self.background_url = "assets/backgrounds/background.png"
-        self.background_image = self.load_background_from_local(self.background_url)
+        self.github_background_url = "https://github.com/user-attachments/assets/591f8b6d-7a10-4cb5-ae8a-6997fd21ea65"
+        self.background_image = self.load_background_from_github()
         
-        # Configurar dimensiones del mundo basadas en el fondo
+        # Configurar dimensiones del mundo completo basadas en el PNG
         if self.background_image:
             self.world_width = self.background_image.get_width()
             self.world_height = self.background_image.get_height()
+            print(f"🌍 Mundo del Nivel 2: {self.world_width}x{self.world_height}")
         else:
+            # Dimensiones grandes por defecto para permitir exploración vertical
             self.world_width = 1920
-            self.world_height = 1080
+            self.world_height = 3000  # Altura aumentada para exploración vertical
         
         # Cargar personajes con stats transferidos del nivel 1
         
@@ -249,6 +302,7 @@ class Nivel2:
         
         # Sistema de audio
         self.audio = get_audio_manager()
+        self.sound_generator = get_sound_generator()
         
         # Cámara mejorada
         self.camera_x = 0
@@ -258,9 +312,9 @@ class Nivel2:
         # Sistema de colisiones (igual que nivel 1)
         self.collision_manager = CollisionManager(self.world_width, self.world_height)
         
-        # Cargar bloques de colisión desde archivo (igual que nivel 1)
+        # Cargar bloques de colisión desde archivo específico de nivel 2
         try:
-            self.collision_manager.load_collision_blocks("collision_data.txt")
+            self.collision_manager.load_collision_blocks("collision_data_nivel2.txt")
             print(f"📂 Bloques de colisión cargados para nivel 2")
         except Exception as e:
             print(f"⚠️ Error cargando colisiones nivel 2: {e}")
@@ -292,11 +346,12 @@ class Nivel2:
         self.shield_duration = 15 * 60  # 15 segundos a 60 FPS
         
         # Límites del escenario (se ajustarán cuando se cargue la imagen real)
+        # Dimensiones expandidas para PNG completo con exploración vertical
         self.world_boundaries = {
             'left': 0,
             'right': 1920,
             'top': 0,
-            'bottom': 1080
+            'bottom': 2160  # Doble altura para exploración completa vertical
         }
         
         # Listo para comenzar
@@ -304,6 +359,56 @@ class Nivel2:
         print(f"🎮 Nivel 2 iniciado - Personaje activo: {self.active_character.name}")
         print(f"🤖 IA controlando: {self.inactive_character.name}")
         print(f"👹 Chamán Malvado despertado con {self.chaman.health} HP")
+    
+    def load_background_from_github(self):
+        """Carga el fondo completo del Nivel 2 desde GitHub"""
+        try:
+            print("📥 Descargando fondo completo del Nivel 2 desde GitHub...")
+            response = requests.get(self.github_background_url, timeout=15)
+            response.raise_for_status()
+            
+            image_data = BytesIO(response.content)
+            pil_image = Image.open(image_data)
+            
+            # Información de la imagen original
+            original_width, original_height = pil_image.size
+            print(f"📐 Dimensiones del PNG completo: {original_width}x{original_height}")
+            
+            # Convertir a formato pygame manteniendo dimensiones originales
+            pil_image = pil_image.convert('RGB')
+            image_data = pil_image.tobytes()
+            
+            background = pygame.image.fromstring(image_data, pil_image.size, 'RGB')
+            background = background.convert()
+            
+            print(f"✅ Fondo completo del Nivel 2 cargado: {original_width}x{original_height}")
+            return background
+            
+        except Exception as e:
+            print(f"❌ Error cargando fondo desde GitHub: {e}")
+            print("🎨 Usando fondo de respaldo...")
+            return self.create_fallback_background()
+    
+    def create_fallback_background(self):
+        """Crea un fondo de respaldo para el Nivel 2"""
+        print("🎨 Creando fondo de respaldo del Nivel 2...")
+        background = pygame.Surface((self.world_width, self.world_height))
+        
+        # Gradiente oscuro para ambiente del chamán
+        for y in range(self.world_height):
+            intensity = 10 + (y * 40) // self.world_height
+            color = (intensity, intensity + 10, intensity)
+            pygame.draw.line(background, color, (0, y), (self.world_width, y))
+        
+        # Elementos decorativos oscuros
+        for _ in range(100):
+            x = random.randint(0, self.world_width)
+            y = random.randint(0, self.world_height)
+            size = random.randint(15, 40)
+            color = (random.randint(20, 60), random.randint(10, 40), random.randint(10, 40))
+            pygame.draw.circle(background, color, (x, y), size)
+        
+        return background
     
     def load_background_from_local(self, file_path):
         """Carga el fondo desde archivo local - IGUAL QUE NIVEL 1"""
@@ -395,22 +500,22 @@ class Nivel2:
             print(f"⚠️ Error escalando chamán: {e}")
     
     def create_simple_collectible_images(self):
-        """Crea sprites simples para manzanas y pociones - Sin URLs complicadas"""
-        # Manzana simple pero visible
-        self.apple_image = pygame.Surface((40, 40), pygame.SRCALPHA)
-        pygame.draw.circle(self.apple_image, (220, 50, 50), (20, 22), 16)
-        pygame.draw.circle(self.apple_image, (255, 100, 100), (16, 18), 12)
-        pygame.draw.rect(self.apple_image, (139, 69, 19), (18, 6, 6, 12))
-        pygame.draw.ellipse(self.apple_image, (34, 139, 34), (14, 4, 12, 8))
-        pygame.draw.circle(self.apple_image, (255, 200, 200, 80), (15, 15), 8)
+        """Crea sprites simples para manzanas y pociones - Reducidos para mejor FPS"""
+        # Manzana simple pero visible (reducida a 20x20)
+        self.apple_image = pygame.Surface((20, 20), pygame.SRCALPHA)
+        pygame.draw.circle(self.apple_image, (220, 50, 50), (10, 11), 8)
+        pygame.draw.circle(self.apple_image, (255, 100, 100), (8, 9), 6)
+        pygame.draw.rect(self.apple_image, (139, 69, 19), (9, 3, 3, 6))
+        pygame.draw.ellipse(self.apple_image, (34, 139, 34), (7, 2, 6, 4))
+        pygame.draw.circle(self.apple_image, (255, 200, 200, 80), (7, 7), 4)
         
-        # Poción simple pero visible
-        self.potion_image = pygame.Surface((40, 40), pygame.SRCALPHA)
-        pygame.draw.rect(self.potion_image, (100, 100, 100), (16, 18, 8, 16))
-        pygame.draw.ellipse(self.potion_image, (20, 100, 220), (14, 22, 12, 12))
-        pygame.draw.rect(self.potion_image, (50, 150, 255), (18, 14, 4, 14))
-        pygame.draw.circle(self.potion_image, (100, 200, 255), (20, 26), 5)
-        pygame.draw.circle(self.potion_image, (150, 220, 255, 60), (20, 26), 10)
+        # Poción simple pero visible (reducida a 20x20)
+        self.potion_image = pygame.Surface((20, 20), pygame.SRCALPHA)
+        pygame.draw.rect(self.potion_image, (100, 100, 100), (8, 9, 4, 8))
+        pygame.draw.ellipse(self.potion_image, (20, 100, 220), (7, 11, 6, 6))
+        pygame.draw.rect(self.potion_image, (50, 150, 255), (9, 7, 2, 7))
+        pygame.draw.circle(self.potion_image, (100, 200, 255), (10, 13), 2)
+        pygame.draw.circle(self.potion_image, (150, 220, 255, 60), (10, 13), 5)
     
     def setup_level2_worm_spawns(self):
         """Configura 4 áreas de spawn para los 8 gusanos del nivel 2"""
@@ -468,13 +573,22 @@ class Nivel2:
                     print("📋 Volviendo al menú principal...")
                     return "MAIN_MENU"
                 elif event.key == pygame.K_SPACE and not self.game_over and not self.victory and not self.collision_manager.editor_mode and not self.game_paused:
+                    # SONIDO: Ataque básico
+                    play_sound('attack_basic', 0.8)
                     # Ataque básico
                     self.perform_basic_attack()
                 elif event.key == pygame.K_x and not self.game_over and not self.victory and not self.collision_manager.editor_mode and not self.game_paused:
+                    # SONIDO: Ataque especial según personaje
+                    if self.active_character == self.juan:
+                        play_sound('combo_attack', 0.9)
+                    else:
+                        play_sound('projectile_shoot', 0.8)
                     # Ataque especial
                     self.perform_special_attack()
                 # Manejo del menú de mejoras (simplificado)
                 elif self.show_upgrade_menu and event.key in [pygame.K_1, pygame.K_2, pygame.K_3]:
+                    # SONIDO: Selección de mejora
+                    play_sound('upgrade_select', 0.8)
                     self.handle_upgrade_selection(event.key)
                     self.show_upgrade_menu = False
                     self.game_paused = False
@@ -513,6 +627,9 @@ class Nivel2:
     
     def switch_character(self):
         """Alterna entre personajes"""
+        # SONIDO: Cambio de personaje
+        play_sound('character_switch', 0.7)
+        
         self.active_character, self.inactive_character = self.inactive_character, self.active_character
         self.active_attack_system, self.inactive_attack_system = self.inactive_attack_system, self.active_attack_system
         self.inactive_ai = CharacterAI(self.inactive_character, self.active_character)
@@ -543,7 +660,7 @@ class Nivel2:
         # Buscar poción cerca del personaje activo
         for item in self.dropped_items[:]:
             if item['type'] == 'potion' and not item['collected']:
-                item_rect = pygame.Rect(item['x'], item['y'], 40, 40)
+                item_rect = pygame.Rect(item['x'], item['y'], 20, 20)
                 player_rect = pygame.Rect(self.active_character.x, self.active_character.y, 
                                         self.active_character.width, self.active_character.height)
                 
@@ -819,7 +936,7 @@ class Nivel2:
         # Verificar colisión con manzanas (auto-consumo)
         for item in self.dropped_items[:]:
             if not item['collected'] and item['type'] == 'apple':
-                item_rect = pygame.Rect(item['x'], item['y'], 40, 40)
+                item_rect = pygame.Rect(item['x'], item['y'], 20, 20)
                 player_rect = pygame.Rect(self.active_character.x, self.active_character.y, 
                                         self.active_character.width, self.active_character.height)
                 
@@ -906,6 +1023,9 @@ class Nivel2:
         
         # Dibujar chamán malvado
         self.chaman.draw(self.screen, self.camera_x, self.camera_y)
+        
+        # Dibujar barras de vida flotantes sobre personajes
+        self.draw_floating_health_bars()
         
         # Dibujar gusanos adicionales del nivel 2
         self.worm_spawner.draw(self.screen, self.camera_x, self.camera_y)
@@ -1006,6 +1126,91 @@ class Nivel2:
         # Mensaje de revival si es necesario
         if self.show_revival_prompt:
             self.draw_revival_prompt()
+    
+    def draw_floating_health_bars(self):
+        """Dibuja barras de vida flotantes mejoradas encima de los personajes"""
+        characters = [
+            {'char': self.juan, 'name': 'Juan', 'color': (50, 150, 255)},
+            {'char': self.adan, 'name': 'Adán', 'color': (255, 100, 50)}
+        ]
+        
+        for char_data in characters:
+            character = char_data['char']
+            name = char_data['name']
+            name_color = char_data['color']
+            
+            if character.health <= 0:
+                continue
+                
+            # Posición en pantalla
+            screen_x = character.x - self.camera_x
+            screen_y = character.y - self.camera_y
+            
+            # Solo dibujar si está visible
+            if -100 < screen_x < self.screen_width + 100 and -100 < screen_y < self.screen_height + 100:
+                # Configuración de la barra
+                bar_width = 80
+                bar_height = 12
+                name_offset = -70  # Altura sobre el personaje
+                bar_offset = -55
+                
+                # Posición centrada sobre el personaje
+                bar_x = screen_x + 32 - bar_width // 2  # 32 es la mitad del ancho del personaje
+                bar_y = screen_y + bar_offset
+                name_x = screen_x + 32
+                name_y = screen_y + name_offset
+                
+                # Nombre del personaje
+                font = pygame.font.Font(None, 24)
+                name_text = font.render(name, True, name_color)
+                name_rect = name_text.get_rect(center=(name_x, name_y))
+                
+                # Fondo semi-transparente para el nombre
+                name_bg = pygame.Surface((name_rect.width + 8, name_rect.height + 4), pygame.SRCALPHA)
+                name_bg.fill((0, 0, 0, 150))
+                self.screen.blit(name_bg, (name_rect.x - 4, name_rect.y - 2))
+                self.screen.blit(name_text, name_rect)
+                
+                # Calcular porcentaje de vida
+                health_ratio = character.health / character.max_health
+                
+                # Fondo de la barra (negro semi-transparente)
+                bg_surface = pygame.Surface((bar_width + 4, bar_height + 4), pygame.SRCALPHA)
+                bg_surface.fill((0, 0, 0, 180))
+                self.screen.blit(bg_surface, (bar_x - 2, bar_y - 2))
+                
+                # Barra de vida con gradiente de color
+                if health_ratio > 0.7:
+                    health_color = (0, 255, 0)  # Verde
+                elif health_ratio > 0.4:
+                    health_color = (255, 255, 0)  # Amarillo
+                elif health_ratio > 0.2:
+                    health_color = (255, 140, 0)  # Naranja
+                else:
+                    health_color = (255, 0, 0)  # Rojo
+                
+                # Dibujar barra de vida
+                current_width = int(bar_width * health_ratio)
+                if current_width > 0:
+                    pygame.draw.rect(self.screen, health_color, (bar_x, bar_y, current_width, bar_height))
+                
+                # Borde de la barra
+                pygame.draw.rect(self.screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 2)
+                
+                # Texto de vida (números)
+                health_font = pygame.font.Font(None, 20)
+                health_text = f"{character.health}/{character.max_health}"
+                health_surface = health_font.render(health_text, True, (255, 255, 255))
+                health_rect = health_surface.get_rect(center=(bar_x + bar_width // 2, bar_y + bar_height // 2))
+                self.screen.blit(health_surface, health_rect)
+                
+                # Indicador de escudo si está activo
+                if hasattr(character, 'shield_active') and character.shield_active:
+                    shield_text = "🛡️"
+                    shield_font = pygame.font.Font(None, 24)
+                    shield_surface = shield_font.render(shield_text, True, (100, 200, 255))
+                    shield_rect = shield_surface.get_rect(center=(bar_x + bar_width + 15, bar_y + bar_height // 2))
+                    self.screen.blit(shield_surface, shield_rect)
     
     def draw_revival_prompt(self):
         """Dibuja el mensaje de revival"""
