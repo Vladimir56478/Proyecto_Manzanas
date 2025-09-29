@@ -92,16 +92,23 @@ class ChamanCharacter:
                     frame_rgba = gif.convert('RGBA')
                     
                     # Redimensionar para que sea más imponente (128x128)
-                    frame_rgba = frame_rgba.resize((128, 128), Image.LANCZOS)
+                    try:
+                        if hasattr(Image, 'Resampling'):
+                            frame_rgba = frame_rgba.resize((128, 128), Image.Resampling.LANCZOS)
+                        else:
+                            frame_rgba = frame_rgba.resize((128, 128))
+                    except AttributeError:
+                        frame_rgba = frame_rgba.resize((128, 128))
                     
                     # Convertir fondo blanco a transparente
                     pixel_data = frame_rgba.load()
-                    for y in range(frame_rgba.height):
-                        for x in range(frame_rgba.width):
-                            r, g, b, a = pixel_data[x, y]
-                            # Si el pixel es blanco o casi blanco, hacerlo transparente
-                            if r > 240 and g > 240 and b > 240:
-                                pixel_data[x, y] = (r, g, b, 0)  # Transparente
+                    if pixel_data is not None:
+                        for y in range(frame_rgba.height):
+                            for x in range(frame_rgba.width):
+                                r, g, b, a = pixel_data[x, y]
+                                # Si el pixel es blanco o casi blanco, hacerlo transparente
+                                if r > 240 and g > 240 and b > 240:
+                                    pixel_data[x, y] = (r, g, b, 0)  # Transparente
                     
                     # Convertir a pygame surface
                     frame_data = frame_rgba.tobytes()

@@ -42,7 +42,13 @@ class Item:
                 
                 pil_image = Image.open(BytesIO(response.content))
                 pil_image = pil_image.convert('RGBA')
-                pil_image = pil_image.resize((self.width, self.height), Image.LANCZOS)
+                try:
+                    if hasattr(Image, 'Resampling'):
+                        pil_image = pil_image.resize((self.width, self.height), Image.Resampling.LANCZOS)
+                    else:
+                        pil_image = pil_image.resize((self.width, self.height))
+                except AttributeError:
+                    pil_image = pil_image.resize((self.width, self.height))
                 
                 image_data = pil_image.tobytes()
                 surface = pygame.image.fromstring(image_data, (self.width, self.height), 'RGBA')

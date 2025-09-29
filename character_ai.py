@@ -231,6 +231,7 @@ class CharacterAI:
     def perform_attack(self):
         """Realiza un ataque con animación contra el enemigo actual"""
         if self.current_target and hasattr(self.current_target, 'alive') and self.current_target.alive:
+            # CASO 1: HAY ENEMIGO ESPECÍFICO - atacar hacia el enemigo
             # Calcular dirección hacia el enemigo
             dx = self.current_target.x - self.character.x
             dy = self.current_target.y - self.character.y
@@ -254,34 +255,48 @@ class CharacterAI:
             else:
                 # Adán usa direcciones normales
                 attack_direction = base_attack_direction
+        else:
+            # CASO 2: NO HAY ENEMIGO ESPECÍFICO - atacar hacia donde está mirando
+            current_direction = getattr(self.character, 'current_direction', 'down')
             
-            # Iniciar animación de ataque real
-            if hasattr(self.character, 'start_ai_attack'):
-                attack_started = self.character.start_ai_attack(attack_direction)
-            
-            # Simular daño usando el sistema de ataques real
-            if hasattr(self.character, 'attacks'):
-                # Crear lista temporal con el enemigo objetivo
-                enemies_list = [self.current_target]
-                
-                # Usar el sistema de ataques del personaje
-                if hasattr(self.character.attacks, 'prepare_combo_attack'):
-                    # Para Juan - sistema de combos con dirección corregida (MARCAR COMO IA)
-                    self.character.attacks.attack_direction = attack_direction
-                    hit_result = self.character.attacks.prepare_combo_attack(enemies_list, from_ai=True)
-                    if hit_result:
-                        # Aplicar daño inmediatamente para IA
-                        self.character.attacks.apply_pending_damage()
-                        
-                elif hasattr(self.character.attacks, 'prepare_melee_attack'):
-                    # Para Adán - ataque cuerpo a cuerpo
-                    self.character.attacks.attack_direction = attack_direction
-                    hit_result = self.character.attacks.prepare_melee_attack(enemies_list)
-                    if hit_result:
-                        # Aplicar daño inmediatamente para IA
-                        self.character.attacks.apply_pending_damage()
+            if hasattr(self.character, 'name') and self.character.name == "Juan":
+                # Para Juan IA: usar dirección directa hacia donde mira (sin inversión adicional)
+                # El sistema ya maneja las inversiones correctamente
+                attack_direction = current_direction
+                print(f"🎯 Juan IA quieto - mirando {current_direction}, atacando hacia {attack_direction}")
             else:
-                # Fallback: daño simple si no hay sistema de ataques
+                # Adán usa la dirección normal
+                attack_direction = current_direction
+                print(f"🎯 {self.character.name} IA quieto - atacando hacia {attack_direction}")
+        
+        # Iniciar animación de ataque real
+        if hasattr(self.character, 'start_ai_attack'):
+            attack_started = self.character.start_ai_attack(attack_direction)
+        
+        # Simular daño usando el sistema de ataques real
+        if hasattr(self.character, 'attacks'):
+            # Crear lista temporal con el enemigo objetivo (o lista vacía si no hay enemigo)
+            enemies_list = [self.current_target] if self.current_target else []
+            
+            # Usar el sistema de ataques del personaje
+            if hasattr(self.character.attacks, 'prepare_combo_attack'):
+                # Para Juan - sistema de combos con dirección corregida (MARCAR COMO IA)
+                self.character.attacks.attack_direction = attack_direction
+                hit_result = self.character.attacks.prepare_combo_attack(enemies_list, from_ai=True)
+                if hit_result:
+                    # Aplicar daño inmediatamente para IA
+                    self.character.attacks.apply_pending_damage()
+                    
+            elif hasattr(self.character.attacks, 'prepare_melee_attack'):
+                # Para Adán - ataque cuerpo a cuerpo
+                self.character.attacks.attack_direction = attack_direction
+                hit_result = self.character.attacks.prepare_melee_attack(enemies_list)
+                if hit_result:
+                    # Aplicar daño inmediatamente para IA
+                    self.character.attacks.apply_pending_damage()
+        else:
+            # Fallback: daño simple si no hay sistema de ataques (solo si hay enemigo)
+            if self.current_target:
                 damage = random.randint(15, 25)
                 if hasattr(self.current_target, 'health'):
                     self.current_target.health -= damage
@@ -386,22 +401,12 @@ class CharacterAI:
         
         # Si se está moviendo, devolver dirección EXACTA del movimiento
         if self.is_moving and self.movement_direction:
-            # IMPORTANTE: Para las animaciones, las IAs deben usar las MISMAS direcciones
-            # que cuando el jugador controla manualmente
+            # CORREGIDO: Juan IA debe usar las MISMAS direcciones que el movimiento real
+            # NO aplicar inversiones extra aquí porque character_base.py ya las maneja
             
-            # Si es Juan, aplicar las mismas inversiones que en el control manual
-            if hasattr(self.character, 'name') and self.character.name == "Juan":
-                # Juan tiene direcciones invertidas en control manual, aplicar lo mismo en IA
-                direction_map = {
-                    "up": "down",     # Cuando se mueve hacia arriba, anima "down"
-                    "down": "up",     # Cuando se mueve hacia abajo, anima "up"
-                    "left": "right",  # Cuando se mueve hacia izquierda, anima "right"
-                    "right": "left"   # Cuando se mueve hacia derecha, anima "left"
-                }
-                return direction_map.get(self.movement_direction, self.movement_direction)
-            else:
-                # Adán usa direcciones normales
-                return self.movement_direction
+            # Tanto Juan como Adán usan direcciones directas del movimiento
+            # Las inversiones visuales se manejan en character_base.py
+            return self.movement_direction
         
         # Si no se mueve, no animar (frame 0)
         return None

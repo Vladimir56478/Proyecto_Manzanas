@@ -8,6 +8,10 @@ class AdanCharacter(CharacterBase):
         self.max_health = 125
         self.health = self.max_health
         self.damage = 28
+        # Atributos adicionales para compatibilidad
+        self.attack_speed = 0.8
+        self.shield_active = False
+        self.attacks = None  # Se asignará después
         print(f"Adan creado en ({x}, {y})")
     
     def take_damage(self, damage):

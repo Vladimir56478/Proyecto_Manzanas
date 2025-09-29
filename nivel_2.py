@@ -18,6 +18,35 @@ from juan_attacks import JuanAttack
 from chaman_malvado import ChamanMalvado
 from character_ai import CharacterAI
 from audio_manager import get_audio_manager
+
+# Clase CollisionBlock para el Nivel 2
+class CollisionBlock:
+    """Un bloque de colisión invisible para el editor"""
+    def __init__(self, x, y, width, height):
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.rect = pygame.Rect(x, y, width, height)
+    
+    def draw_editor(self, screen, camera_x, camera_y):
+        """Dibuja el bloque en modo editor"""
+        # Calcular posición en pantalla
+        screen_x = self.x - camera_x
+        screen_y = self.y - camera_y
+        
+        # Solo dibujar si está visible en pantalla
+        if (-self.width <= screen_x <= SCREEN_WIDTH and 
+            -self.height <= screen_y <= SCREEN_HEIGHT):
+            
+            # Fondo semitransparente
+            block_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            block_surface.fill((255, 0, 0, 100))
+            screen.blit(block_surface, (screen_x, screen_y))
+            
+            # Borde del bloque
+            pygame.draw.rect(screen, (255, 0, 0), 
+                           (screen_x, screen_y, self.width, self.height), 2)
 from loading_screen import LoadingScreen
 from items_system import ItemManager
 from worm_enemy import WormSpawner  # Agregar gusanos al nivel 2
@@ -25,56 +54,184 @@ from sound_generator import get_sound_generator, play_sound
 
 # Clase de colisión común (movida a utils para evitar duplicación)
 
-class GameLevel2:
-    """Clase principal del juego Nivel 2"""
-    
-    def __init__(self):
-        """Inicializar el nivel 2"""
-        pygame.init()
+class StaticItemLevel2:
+    """Representa un item estático en el mapa nivel 2 que se activa con E"""
+    def __init__(self, x, y, item_type):
+        self.x = x
+        self.y = y
+        self.item_type = item_type  # 'apple' o 'potion'
+        self.width = 20
+        self.height = 20
+        self.active = False  # Inicia inactivo para spawn paulatino
+        self.cooldown = 0
+        self.respawn_time = 1800  # 30 segundos a 60 FPS
+        self.animation_offset = 0
+        self.spawn_time = pygame.time.get_ticks()
+        self.spawn_delay = 0  # Delay para aparición paulatina
         
-        # Configuración de pantalla
-        self.screen_width = SCREEN_WIDTH
-        self.screen_height = SCREEN_HEIGHT
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height), pygame.FULLSCREEN)
-        pygame.display.set_caption("⚔️ Nivel 2 - Cueva del Chamán")
+    def update(self):
+        """Actualiza el item con animación y spawn paulatino"""
+        current_time = pygame.time.get_ticks()
         
-        # Usar CollisionManager de utils
-        self.collision_manager = CollisionManager()
+        # Spawn inicial paulatino
+        if not self.active and self.spawn_delay > 0 and current_time >= self.spawn_delay:
+            self.active = True
+            print(f"✨ Item {self.item_type} activado en nivel 2")
         
-        print("✅ Nivel 2 inicializado correctamente")
+        # Animación de flotación solo si está activo
+        if self.active:
+            self.animation_offset = int(3 * math.sin(current_time * 0.005))
+        
+        return True
     
-    def load_collision_blocks(self, filename):
-        """Carga bloques de colisión desde archivo"""
-        try:
-            with open(filename, 'r') as f:
-                for line in f:
-                    x, y = map(int, line.strip().split(','))
-                    self.collision_manager.add_block(x, y)
-            print(f"📂 Cargados bloques de colisión desde {filename}")
-        except FileNotFoundError:
-            print(f"⚠️ Archivo {filename} no encontrado")
-        except Exception as e:
-            print(f"⚠️ Error cargando colisiones: {e}")
-    
-    def add_block(self, x, y):
-        block = CollisionBlock(x, y)
-        if not any(b.x == x and b.y == y for b in self.blocks):
-            self.blocks.append(block)
+    def use_item(self):
+        """Usa el item y lo pone en cooldown"""
+        if self.active:
+            self.active = False
+            self.cooldown = self.respawn_time
             return True
         return False
     
+    def draw(self, screen, camera_x, camera_y, game_apple_image=None, game_potion_image=None):
+        """Dibuja el item estático en pantalla"""
+        # NO dibujar si está inactivo o recolectado
+        if not self.active or getattr(self, 'collected', False):
+            return
+            
+        screen_pos = (self.x - camera_x, self.y - camera_y + self.animation_offset)
+        
+        # Verificar visibilidad
+        screen_width, screen_height = screen.get_size()
+        if not (-50 < screen_pos[0] < screen_width + 50 and -50 < screen_pos[1] < screen_height + 50):
+            return
+        
+        # Dibujar sprite del item
+        image = game_apple_image if self.item_type == 'apple' else game_potion_image
+        if image:
+            screen.blit(image, screen_pos)
+        else:
+            # Fallback: rectángulo de color
+            color = (255, 100, 100) if self.item_type == 'apple' else (100, 100, 255)
+            pygame.draw.rect(screen, color, (*screen_pos, self.width, self.height))
+        
+        # Indicador "E" simplificado
+        font = pygame.font.Font(None, 24)
+        text = font.render("E", True, (255, 255, 255))
+        text_pos = (screen_pos[0] + self.width//2 - 8, screen_pos[1] - 18)
+        pygame.draw.rect(screen, (0, 0, 0, 120), (*text_pos, 16, 16))
+        screen.blit(text, text_pos)
+    
+    def get_rect(self):
+        """Obtiene el rectángulo para detección de colisiones"""
+        return pygame.Rect(self.x, self.y, self.width, self.height)
+
+# CollisionManager completo para Nivel 2 (igual que Nivel 1)
+class CollisionManagerLevel2:
+    """Maneja las colisiones con bloques invisibles - NIVEL 2"""
+    def __init__(self, world_width=5940, world_height=1080):
+        self.blocks = []
+        self.editor_mode = False
+        self.block_size = 32  # CHARACTER_SIZE[0] // 2
+        self.editor_cursor_x = 100
+        self.editor_cursor_y = 100
+        self.world_width = world_width
+        self.world_height = world_height
+        
+        # Nuevo sistema de editor con arrastre
+        self.mouse_pressed = False
+        self.drag_start_x = 0
+        self.drag_start_y = 0
+        self.drag_current_x = 0
+        self.drag_current_y = 0
+        self.is_dragging = False
+        
+        # Sistema de persistencia
+        self.load_collision_data()
+    
+    def load_collision_data(self):
+        """Carga bloques de colisión desde archivo"""
+        try:
+            filename = "collision_data_nivel2.txt"
+            with open(filename, 'r') as f:
+                for line in f:
+                    if line.strip():
+                        x, y, w, h = map(int, line.strip().split(','))
+                        self.blocks.append(CollisionBlock(x, y, w, h))
+            print(f"🧱 Bloques de colisión cargados para Nivel 2: {len(self.blocks)} bloques")
+        except Exception as e:
+            print(f"⚠️ Error cargando bloques Nivel 2: {e}")
+            self.blocks = []
+    
+    def save_collision_data(self, silent=True):
+        """Guarda bloques de colisión en archivo"""
+        try:
+            filename = "collision_data_nivel2.txt"
+            with open(filename, 'w') as f:
+                for block in self.blocks:
+                    f.write(f"{block.x},{block.y},{block.width},{block.height}\n")
+            if not silent:
+                print(f"💾 Bloques guardados en {filename}: {len(self.blocks)} bloques")
+        except Exception as e:
+            print(f"❌ Error guardando bloques: {e}")
+    
+    def add_block(self, x, y):
+        """Añade un bloque de colisión y guarda automáticamente"""
+        # Alinear a la grilla
+        grid_x = (x // self.block_size) * self.block_size
+        grid_y = (y // self.block_size) * self.block_size
+        
+        # Verificar si ya existe un bloque en esa posición
+        for block in self.blocks:
+            if block.x == grid_x and block.y == grid_y:
+                return False
+        
+        self.blocks.append(CollisionBlock(grid_x, grid_y, self.block_size, self.block_size))
+        print(f"✅ Bloque añadido en ({grid_x}, {grid_y})")
+        
+        # Guardar automáticamente
+        self.save_collision_data(silent=True)
+        return True
+    
+    def remove_block(self, x, y):
+        """Remueve un bloque de colisión y guarda automáticamente"""
+        grid_x = (x // self.block_size) * self.block_size
+        grid_y = (y // self.block_size) * self.block_size
+        
+        for block in self.blocks[:]:
+            if block.x == grid_x and block.y == grid_y:
+                self.blocks.remove(block)
+                print(f"🗑️ Bloque eliminado en ({grid_x}, {grid_y})")
+                
+                # Guardar automáticamente
+                self.save_collision_data(silent=True)
+                return True
+        return False
+    
     def check_collision(self, character_rect):
+        """Verifica colisión con bloques"""
         for block in self.blocks:
             if character_rect.colliderect(block.rect):
                 return True
         return False
     
     def can_move_to(self, character, new_x, new_y):
+        """Verifica si un personaje puede moverse a una posición"""
+        # Crear rectángulo temporal en la nueva posición
         test_rect = pygame.Rect(new_x, new_y, 100, 100)  # 64 * 1.56 = 100
-        return not self.check_collision(test_rect)
+        
+        # Verificar colisión con bloques
+        if self.check_collision(test_rect):
+            return False
+        
+        # LÍMITES ESTRICTOS DEL MUNDO - NO PUEDE SALIR DEL PNG
+        if (new_x < 0 or new_x + 100 > self.world_width or 
+            new_y < 0 or new_y + 100 > self.world_height):
+            return False
+        
+        return True
     
     def draw_editor_mode(self, screen, camera_x, camera_y):
-        """Dibuja el modo editor con cursor visual tipo Windows"""
+        """Dibuja el modo editor"""
         if not self.editor_mode:
             return
         
@@ -82,7 +239,6 @@ class GameLevel2:
         for block in self.blocks:
             block.draw_editor(screen, camera_x, camera_y)
         
-        # CURSOR VISUAL TIPO WINDOWS - Copiado desde nivel 1
         # Dibujar cursor del editor con mejor feedback visual
         cursor_screen_x = self.editor_cursor_x - camera_x
         cursor_screen_y = self.editor_cursor_y - camera_y
@@ -101,7 +257,6 @@ class GameLevel2:
         screen.blit(cursor_surface, (cursor_screen_x, cursor_screen_y))
         
         # Borde del cursor con animación
-        import math
         time_factor = pygame.time.get_ticks() / 200
         border_width = int(3 + 2 * abs(math.sin(time_factor)))
         pygame.draw.rect(screen, border_color, 
@@ -125,97 +280,115 @@ class GameLevel2:
             pygame.draw.line(screen, (255, 255, 255), 
                            (center_x, center_y - 8), (center_x, center_y + 8), 3)
         
-        # Información del editor
-        font = pygame.font.Font(None, 48)
-        editor_info = [
-            "🛠️ MODO EDITOR DE COLISIONES - NIVEL 2",
-            "F1: Salir del editor | Flechas: Mover cursor",
-            "ESPACIO: Colocar bloque | BACKSPACE: Eliminar",
-            f"Bloques totales: {len(self.blocks)}"
-        ]
-        
-        for i, info in enumerate(editor_info):
-            text_surface = font.render(info, True, (255, 255, 0))
-            screen.blit(text_surface, (20, 200 + i * 30))
+        # Dibujar rectángulo de arrastre si se está arrastrando
+        if self.is_dragging and self.mouse_pressed:
+            rect_start_x = min(self.drag_start_x, self.drag_current_x) - camera_x
+            rect_start_y = min(self.drag_start_y, self.drag_current_y) - camera_y
+            rect_width = abs(self.drag_current_x - self.drag_start_x)
+            rect_height = abs(self.drag_current_y - self.drag_start_y)
+            
+            # Alinear a la grilla visualmente
+            grid_start_x = ((min(self.drag_start_x, self.drag_current_x) // self.block_size) * self.block_size) - camera_x
+            grid_start_y = ((min(self.drag_start_y, self.drag_current_y) // self.block_size) * self.block_size) - camera_y
+            grid_width = ((abs(self.drag_current_x - self.drag_start_x) // self.block_size) + 1) * self.block_size
+            grid_height = ((abs(self.drag_current_y - self.drag_start_y) // self.block_size) + 1) * self.block_size
+            
+            # Rectángulo de previsualización
+            preview_surface = pygame.Surface((grid_width, grid_height), pygame.SRCALPHA)
+            preview_surface.fill((0, 255, 0, 100))
+            screen.blit(preview_surface, (grid_start_x, grid_start_y))
+            pygame.draw.rect(screen, (0, 255, 0), (grid_start_x, grid_start_y, grid_width, grid_height), 3)
     
-    def handle_editor_input(self, keys_pressed, keys_just_pressed):
+    def handle_editor_input(self, keys_pressed, keys_just_pressed, mouse_events, camera_x, camera_y):
+        """Maneja input del modo editor con sistema de arrastre - IGUAL QUE NIVEL 1"""
         if not self.editor_mode:
             return
         
-        move_speed = 32
-        if keys_just_pressed.get(pygame.K_UP, False):
-            self.editor_cursor_y = max(0, self.editor_cursor_y - move_speed)
-        if keys_just_pressed.get(pygame.K_DOWN, False):
-            self.editor_cursor_y = min(self.world_height - self.block_size, self.editor_cursor_y + move_speed)
-        if keys_just_pressed.get(pygame.K_LEFT, False):
-            self.editor_cursor_x = max(0, self.editor_cursor_x - move_speed)
-        if keys_just_pressed.get(pygame.K_RIGHT, False):
-            self.editor_cursor_x = min(self.world_width - self.block_size, self.editor_cursor_x + move_speed)
+        # Manejar eventos del mouse
+        for event in mouse_events:
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # Click izquierdo
+                    self.mouse_pressed = True
+                    mouse_world_x = event.pos[0] + camera_x
+                    mouse_world_y = event.pos[1] + camera_y
+                    self.drag_start_x = mouse_world_x
+                    self.drag_start_y = mouse_world_y
+                    self.drag_current_x = mouse_world_x
+                    self.drag_current_y = mouse_world_y
+                    self.is_dragging = False
+                    
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1 and self.mouse_pressed:  # Soltar click izquierdo
+                    self.mouse_pressed = False
+                    if self.is_dragging:
+                        # Crear rectángulo de bloques
+                        self.create_block_rectangle()
+                    else:
+                        # Click simple - agregar un bloque
+                        grid_x = (self.drag_start_x // self.block_size) * self.block_size
+                        grid_y = (self.drag_start_y // self.block_size) * self.block_size
+                        if self.add_block(grid_x, grid_y):
+                            print(f"🔧 Bloque guardado automáticamente")
+                    self.is_dragging = False
+                    
+            elif event.type == pygame.MOUSEMOTION:
+                if self.mouse_pressed:
+                    mouse_world_x = event.pos[0] + camera_x
+                    mouse_world_y = event.pos[1] + camera_y
+                    self.drag_current_x = mouse_world_x
+                    self.drag_current_y = mouse_world_y
+                    
+                    # Detectar si se está arrastrando
+                    distance = abs(self.drag_current_x - self.drag_start_x) + abs(self.drag_current_y - self.drag_start_y)
+                    if distance > 10:  # Threshold para detectar arrastre
+                        self.is_dragging = True
         
-        if keys_just_pressed.get(pygame.K_SPACE, False):
-            self.add_block(self.editor_cursor_x, self.editor_cursor_y)
-            self.auto_save()  # Guardado automático
-        
+        # Teclas para eliminar (mantener funcionalidad de teclado)
         if keys_just_pressed.get(pygame.K_BACKSPACE, False):
-            self.remove_block_at(self.editor_cursor_x, self.editor_cursor_y)
-            self.auto_save()  # Guardado automático
+            mouse_pos = pygame.mouse.get_pos()
+            mouse_world_x = mouse_pos[0] + camera_x
+            mouse_world_y = mouse_pos[1] + camera_y
+            grid_x = (mouse_world_x // self.block_size) * self.block_size
+            grid_y = (mouse_world_y // self.block_size) * self.block_size
+            if self.remove_block(grid_x, grid_y):
+                print(f"🗑️ Bloque eliminado y guardado automáticamente")
     
-    def add_block(self, x, y):
-        """Añade un bloque de colisión si no existe ya"""
-        # Alinear a la cuadrícula
-        grid_x = (x // self.block_size) * self.block_size
-        grid_y = (y // self.block_size) * self.block_size
+    def create_block_rectangle(self):
+        """Crea un rectángulo de bloques desde drag_start hasta drag_current"""
+        start_x = min(self.drag_start_x, self.drag_current_x)
+        end_x = max(self.drag_start_x, self.drag_current_x)
+        start_y = min(self.drag_start_y, self.drag_current_y)
+        end_y = max(self.drag_start_y, self.drag_current_y)
         
-        # Verificar si ya existe un bloque en esta posición
-        for block in self.blocks:
-            if block.x == grid_x and block.y == grid_y:
-                return  # Ya existe un bloque aquí
+        # Alinear a la grilla
+        start_grid_x = (start_x // self.block_size) * self.block_size
+        end_grid_x = (end_x // self.block_size) * self.block_size
+        start_grid_y = (start_y // self.block_size) * self.block_size
+        end_grid_y = (end_y // self.block_size) * self.block_size
         
-        # Crear nuevo bloque
-        new_block = CollisionBlock(grid_x, grid_y, self.block_size, self.block_size)
-        self.blocks.append(new_block)
-        print(f"✅ Bloque añadido en ({grid_x}, {grid_y})")
-    
-    def remove_block_at(self, x, y):
-        """Elimina un bloque en la posición especificada"""
-        # Alinear a la cuadrícula
-        grid_x = (x // self.block_size) * self.block_size
-        grid_y = (y // self.block_size) * self.block_size
+        blocks_added = 0
+        for x in range(int(start_grid_x), int(end_grid_x) + self.block_size, self.block_size):
+            for y in range(int(start_grid_y), int(end_grid_y) + self.block_size, self.block_size):
+                # Verificar si ya existe un bloque en esta posición
+                block_exists = any(block.x == x and block.y == y for block in self.blocks)
+                if not block_exists:
+                    new_block = CollisionBlock(x, y, self.block_size, self.block_size)
+                    self.blocks.append(new_block)
+                    blocks_added += 1
         
-        # Buscar y eliminar bloque
-        for block in self.blocks[:]:
-            if block.x == grid_x and block.y == grid_y:
-                self.blocks.remove(block)
-                print(f"🗑️ Bloque eliminado en ({grid_x}, {grid_y})")
-                return
-    
-    def load_collision_blocks(self, filename):
-        """Carga bloques de colisión desde archivo"""
-        try:
-            with open(filename, 'r') as f:
-                for line in f:
-                    if line.strip():
-                        x, y, w, h = map(int, line.strip().split(','))
-                        self.blocks.append(CollisionBlock(x, y, w, h))
-            print(f"📂 {len(self.blocks)} bloques cargados desde {filename}")
-        except FileNotFoundError:
-            print(f"📂 Archivo {filename} no encontrado, empezando sin bloques")
-        except Exception as e:
-            print(f"❌ Error cargando bloques: {e}")
+        if blocks_added > 0:
+            print(f"✅ {blocks_added} bloques agregados en rectángulo")
+            # Guardar automáticamente después del rectángulo completo
+            self.save_collision_data(silent=True)
+            print("💾 Rectángulo guardado automáticamente")
     
     def auto_save(self):
-        """Guarda automáticamente los bloques de colisión"""
-        filename = "collision_data_nivel2.txt"  # Archivo específico para Nivel 2
-        try:
-            with open(filename, 'w') as f:
-                for block in self.blocks:
-                    f.write(f"{block.x},{block.y},{block.width},{block.height}\n")
-            print(f"💾 Guardado automático: {len(self.blocks)} bloques en {filename}")
-        except Exception as e:
-            print(f"❌ Error en guardado automático: {e}")
+        """Método de guardado automático para compatibilidad"""
+        self.save_collision_data(silent=True)
+
 
 class Nivel2:
-    def __init__(self, selected_character='juan'):
+    def __init__(self, selected_character='juan', level1_stats=None):
         pygame.init()
         self.screen_width = 1920
         self.screen_height = 1080
@@ -247,24 +420,44 @@ class Nivel2:
             self.world_width = 1920
             self.world_height = 3000  # Altura aumentada para exploración vertical
         
-        # Cargar personajes con stats transferidos del nivel 1
+        # Cargar personajes con transferencia de estadísticas del nivel 1 o stats base
         
-        # Juan - Mantener progreso del nivel 1 
+        # Juan - Transferir progreso del nivel 1 o usar stats base
         self.juan = JuanCharacter(300, 400)
-        # Stats base mejorados del nivel 1
-        self.juan.max_health = 100 + (25 * 3)  # Base + mejoras típicas
-        self.juan.health = self.juan.max_health
-        self.juan.speed = 6.5 + (0.8 * 3)  # Base + mejoras típicas
-        self.juan.damage = 22 + (8 * 3)  # Base + mejoras típicas
+        if level1_stats and 'juan' in level1_stats:
+            # Transferir estadísticas del nivel 1
+            juan_stats = level1_stats['juan']
+            self.juan.max_health = juan_stats.get('max_health', 100)
+            self.juan.health = juan_stats.get('health', self.juan.max_health)
+            self.juan.speed = juan_stats.get('speed', 6.5)
+            self.juan.damage = juan_stats.get('damage', 22)
+            print(f"📊 Juan - Stats transferidos del Nivel 1: Vida {self.juan.health}/{self.juan.max_health}, Velocidad {self.juan.speed}, Daño {self.juan.damage}")
+        else:
+            # Stats base si se juega directamente el nivel 2
+            self.juan.max_health = 100
+            self.juan.health = 100
+            self.juan.speed = 6.5
+            self.juan.damage = 22
+            print(f"📊 Juan - Stats base: Vida {self.juan.health}/{self.juan.max_health}, Velocidad {self.juan.speed}, Daño {self.juan.damage}")
         self.juan.name = "Juan"
         
-        # Adán - Mantener progreso del nivel 1
+        # Adán - Transferir progreso del nivel 1 o usar stats base
         self.adan = AdanCharacter(400, 400)
-        # Stats base mejorados del nivel 1
-        self.adan.max_health = 125 + (25 * 3)  # Base + mejoras típicas
-        self.adan.health = self.adan.max_health
-        self.adan.speed = 5.5 + (0.8 * 3)  # Base + mejoras típicas
-        self.adan.damage = 28 + (8 * 3)  # Base + mejoras típicas
+        if level1_stats and 'adan' in level1_stats:
+            # Transferir estadísticas del nivel 1
+            adan_stats = level1_stats['adan']
+            self.adan.max_health = adan_stats.get('max_health', 125)
+            self.adan.health = adan_stats.get('health', self.adan.max_health)
+            self.adan.speed = adan_stats.get('speed', 5.5)
+            self.adan.damage = adan_stats.get('damage', 28)
+            print(f"📊 Adán - Stats transferidos del Nivel 1: Vida {self.adan.health}/{self.adan.max_health}, Velocidad {self.adan.speed}, Daño {self.adan.damage}")
+        else:
+            # Stats base si se juega directamente el nivel 2
+            self.adan.max_health = 125
+            self.adan.health = 125
+            self.adan.speed = 5.5
+            self.adan.damage = 28
+            print(f"📊 Adán - Stats base: Vida {self.adan.health}/{self.adan.max_health}, Velocidad {self.adan.speed}, Daño {self.adan.damage}")
         self.adan.name = "Adán"
         
         # Cargar sistemas de ataque mejorados
@@ -300,24 +493,22 @@ class Nivel2:
         self.worm_spawner = WormSpawner(max_worms=15)  # 15 gusanos como solicitado
         self.setup_level2_worm_spawns()
         
-        # Sistema de audio
-        self.audio = get_audio_manager()
-        self.sound_generator = get_sound_generator()
-        
-        # Cámara mejorada
+        # Sistema de cámara ESTÁTICA para nivel 2 - NO SE MUEVE
         self.camera_x = 0
         self.camera_y = 0
-        self.camera_smooth_factor = 0.08  # Más suave para combate con jefe
+        self.camera_follow_enabled = False  # Cámara estática
+        self.camera_fixed = True  # Bandera para cámara fija
         
-        # Sistema de colisiones (igual que nivel 1)
-        self.collision_manager = CollisionManager(self.world_width, self.world_height)
+        # Sistema de colisiones - NIVEL 2 CON LÍMITES ESTRICTOS
+        self.collision_manager = CollisionManagerLevel2(self.world_width, self.world_height)
         
-        # Cargar bloques de colisión desde archivo específico de nivel 2
-        try:
-            self.collision_manager.load_collision_blocks("collision_data_nivel2.txt")
-            print(f"📂 Bloques de colisión cargados para nivel 2")
-        except Exception as e:
-            print(f"⚠️ Error cargando colisiones nivel 2: {e}")
+        print(f"🛠️ CONTROLES DEL EDITOR NIVEL 2:")
+        print(f"   F1: Activar/Desactivar modo editor")
+        print(f"   Click y arrastrar: Crear rectángulo de bloques")  
+        print(f"   Click simple: Colocar bloque individual")
+        print(f"   Backspace: Eliminar bloque en cursor del mouse")
+        print(f"   💾 GUARDADO AUTOMÁTICO: Cada bloque se guarda instantáneamente")
+        print(f"   📁 Archivo: collision_data_nivel2.txt")
             
         self.keys_last_frame = list(pygame.key.get_pressed())  # Para detectar pulsaciones
         self.game_paused = False  # Sistema de pausa para editor
@@ -330,9 +521,11 @@ class Nivel2:
         self.show_revival_prompt = False
         self.revival_distance = 100
         
-        # Sistema de coleccionables simplificado (igual que nivel 1)
-        self.dropped_items = []  # Items simples: gusano muere -> PNG aparece
+        # Sistema de coleccionables distribuidos (igual que nivel 1)
+        self.dropped_items = []  # Items drops de enemigos
+        self.static_items = []   # Items distribuidos por el mapa
         self.create_simple_collectible_images()  # Crear sprites simples
+        self.setup_static_items_level2()  # Configurar sistema de spawn distribuido
         
         # Variables de compatibilidad para código existente
         self.show_upgrade_menu = False
@@ -488,12 +681,15 @@ class Nivel2:
                 self.scale_character_sprites(self.chaman.character, scale_factor)
             
             # Escalar sprites de ataques del chamán si existen
-            if hasattr(self.chaman, 'attack_system') and hasattr(self.chaman.attack_system, 'animations'):
-                for direction in self.chaman.attack_system.animations:
-                    for i, frame in enumerate(self.chaman.attack_system.animations[direction]):
-                        original_size = frame.get_size()
-                        new_size = (int(original_size[0] * scale_factor), int(original_size[1] * scale_factor))
-                        self.chaman.attack_system.animations[direction][i] = pygame.transform.scale(frame, new_size)
+            if hasattr(self.chaman, 'attack_system') and hasattr(self.chaman.attack_system, 'attack_frames'):
+                try:
+                    for direction in self.chaman.attack_system.attack_frames:
+                        for i, frame in enumerate(self.chaman.attack_system.attack_frames[direction]):
+                            original_size = frame.get_size()
+                            new_size = (int(original_size[0] * scale_factor), int(original_size[1] * scale_factor))
+                            self.chaman.attack_system.attack_frames[direction][i] = pygame.transform.scale(frame, new_size)
+                except (AttributeError, KeyError):
+                    pass  # Si no tiene attack_frames o falla, continuar
             
             print(f"✅ Chamán escalado {scale_factor}x para mejor jugabilidad")
         except Exception as e:
@@ -531,6 +727,97 @@ class Nivel2:
         
         print("✅ 4 áreas de spawn configuradas para 8 gusanos en Nivel 2")
     
+    def setup_static_items_level2(self):
+        """Configura sistema de spawn de items distribuidos para nivel 2 - igual que nivel 1"""
+        # Configurar spawn temporal de items (hasta 10 total)
+        self.max_items = 10
+        self.items_spawned = 0
+        self.last_item_spawn_time = pygame.time.get_ticks()
+        self.item_spawn_interval = 5000  # 5 segundos entre cada item
+        
+        # Lista de tipos de items con probabilidades
+        self.item_types = [
+            ('apple', 0.6),  # 60% manzanas
+            ('potion', 0.4)  # 40% pociones
+        ]
+        
+        print(f"✅ Sistema de spawn distribuido Nivel 2 configurado - 1 item cada 5 segundos (máximo {self.max_items})")
+        print("📍 Items aparecerán aleatoriamente por todo el mapa evitando bloques de colisión")
+    
+    def spawn_random_item_level2(self):
+        """Crea un item en una posición aleatoria válida del mapa nivel 2"""
+        if self.items_spawned >= self.max_items:
+            return None
+            
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_item_spawn_time < self.item_spawn_interval:
+            return None
+        
+        # Intentar encontrar una posición válida (máximo 50 intentos)
+        attempts = 0
+        max_attempts = 50
+        
+        while attempts < max_attempts:
+            # Generar posición aleatoria dentro del mundo (con margen)
+            x = random.randint(100, self.world_boundaries['right'] - 100)
+            y = random.randint(100, self.world_boundaries['bottom'] - 100)
+            
+            # Verificar que no esté en un bloque de colisión
+            item_rect = pygame.Rect(x, y, 20, 20)  # Tamaño del item
+            
+            # Revisar colisión con bloques invisibles
+            collision_found = False
+            for block in self.collision_manager.blocks:
+                if item_rect.colliderect(block.rect):
+                    collision_found = True
+                    break
+            
+            # Verificar que no esté muy cerca de otros items existentes
+            too_close = False
+            for existing_item in self.static_items:
+                if existing_item.active:
+                    dist = math.sqrt((x - existing_item.x)**2 + (y - existing_item.y)**2)
+                    if dist < 150:  # Mínimo 150 píxeles de separación
+                        too_close = True
+                        break
+            
+            # Verificar que no esté muy cerca de personajes o enemigos
+            for char in [self.juan, self.adan, self.chaman]:
+                dist = math.sqrt((x - char.x)**2 + (y - char.y)**2)
+                if dist < 100:  # Mínimo 100 píxeles de los personajes/jefes
+                    too_close = True
+                    break
+            
+            if not collision_found and not too_close:
+                # Posición válida encontrada
+                # Seleccionar tipo de item basado en probabilidades
+                rand_val = random.random()
+                cumulative_prob = 0
+                selected_type = 'apple'  # Por defecto
+                
+                for item_type, prob in self.item_types:
+                    cumulative_prob += prob
+                    if rand_val <= cumulative_prob:
+                        selected_type = item_type
+                        break
+                
+                # Crear item usando clase StaticItem local
+                new_item = StaticItemLevel2(x, y, selected_type)
+                new_item.active = True  # Activar inmediatamente
+                new_item.spawn_time = current_time
+                self.static_items.append(new_item)
+                
+                self.items_spawned += 1
+                self.last_item_spawn_time = current_time
+                
+                print(f"✨ Item {selected_type} spawneado en nivel 2 ({x}, {y}) - {self.items_spawned}/{self.max_items}")
+                return new_item
+            
+            attempts += 1
+        
+        print(f"⚠️ No se pudo encontrar posición válida para item nivel 2 después de {max_attempts} intentos")
+        return None
+    
     # Función eliminada - Ahora usamos create_simple_collectible_images()
     
     def handle_events(self):
@@ -547,7 +834,14 @@ class Nivel2:
         
         self.keys_last_frame = list(keys_pressed)
         
+        # Recopilar todos los eventos para el editor
+        mouse_events = []
+        
         for event in pygame.event.get():
+            # Guardar eventos del mouse para el editor
+            if event.type in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION]:
+                mouse_events.append(event)
+                
             if event.type == pygame.QUIT:
                 return False
             elif event.type == pygame.KEYDOWN:
@@ -563,6 +857,28 @@ class Nivel2:
                     self.collision_manager.editor_mode = not self.collision_manager.editor_mode
                     mode = "activado" if self.collision_manager.editor_mode else "desactivado"
                     print(f"🛠️ Modo editor {mode} en Nivel 2")
+                    if self.collision_manager.editor_mode:
+                        print("🔄 GUARDADO AUTOMÁTICO ACTIVADO")
+                        print("✨ Todos los bloques se guardan instantáneamente")
+                        print("📁 Archivo: collision_data_nivel2.txt")
+                    else:
+                        # Guardado final al salir del editor
+                        try:
+                            self.collision_manager.auto_save()
+                            print(f"💾 Configuración final guardada: {len(self.collision_manager.blocks)} bloques")
+                        except:
+                            print("💾 Guardado manual de bloques de colisión")
+                elif event.key == pygame.K_p:
+                    # Tecla de pausa
+                    self.game_paused = not self.game_paused
+                    if self.game_paused:
+                        print("⏸️ Juego pausado - Presiona P para continuar")
+                    else:
+                        print("▶️ Juego reanudado")
+                elif event.key == pygame.K_m and self.game_paused:
+                    # Ir al menú principal desde pausa
+                    print("🏠 Regresando al menú principal desde pausa...")
+                    return "MAIN_MENU"
                 elif event.key == pygame.K_TAB and not self.game_over and not self.victory and not self.collision_manager.editor_mode and not self.game_paused:
                     if self.switch_cooldown <= 0 and self.juan.health > 0 and self.adan.health > 0:
                         self.switch_character()
@@ -578,14 +894,9 @@ class Nivel2:
                     # Ataque básico
                     self.perform_basic_attack()
                 elif event.key == pygame.K_x and not self.game_over and not self.victory and not self.collision_manager.editor_mode and not self.game_paused:
-                    # SONIDO: Ataque especial según personaje
-                    if self.active_character == self.juan:
-                        play_sound('combo_attack', 0.9)
-                    else:
-                        play_sound('projectile_shoot', 0.8)
-                    # Ataque especial
-                    self.perform_special_attack()
-                # Manejo del menú de mejoras (simplificado)
+                    # ELIMINADO: Ataque especial de bolitas
+                    print("❌ Ataque especial deshabilitado")
+                # Manejo del menú de mejoras - EXACTAMENTE IGUAL QUE NIVEL 1 (3 opciones)
                 elif self.show_upgrade_menu and event.key in [pygame.K_1, pygame.K_2, pygame.K_3]:
                     # SONIDO: Selección de mejora
                     play_sound('upgrade_select', 0.8)
@@ -596,7 +907,7 @@ class Nivel2:
         # Manejo del modo editor - PAUSAR JUEGO
         if self.collision_manager.editor_mode:
             self.game_paused = True
-            self.collision_manager.handle_editor_input(keys_pressed, keys_just_pressed)
+            self.collision_manager.handle_editor_input(keys_pressed, keys_just_pressed, mouse_events, self.camera_x, self.camera_y)
             return True
         else:
             self.game_paused = False
@@ -621,22 +932,81 @@ class Nivel2:
             
             # Consumir pociones
             self.handle_potion_consumption(e_key_pressed)
+            
+            # Interacción con items estáticos distribuidos
+            if e_key_pressed and not self.revival_key_pressed:
+                self.check_static_item_interaction_level2()
         
         self.revival_key_pressed = e_key_pressed
         return True
     
     def switch_character(self):
-        """Alterna entre personajes"""
-        # SONIDO: Cambio de personaje
-        play_sound('character_switch', 0.7)
-        
-        self.active_character, self.inactive_character = self.inactive_character, self.active_character
-        self.active_attack_system, self.inactive_attack_system = self.inactive_attack_system, self.active_attack_system
-        self.inactive_ai = CharacterAI(self.inactive_character, self.active_character)
-        # Mantener mejoras de IA
-        self.inactive_ai.detection_range = 400
-        self.inactive_ai.attack_range = 150
+        """Cambia entre Juan y Adán manteniendo configuración avanzada de IA"""
+        if self.switch_cooldown <= 0 and not self.game_over and not self.victory:
+            # NUEVO: Verificar que el personaje inactivo esté vivo antes de cambiar
+            if self.inactive_character.health <= 0:
+                print(f"❌ No puedes cambiar a {self.inactive_character.name} - está muerto")
+                print(f"💊 Revívelo primero con 'E' cuando estés cerca")
+                return
+            
+            # SONIDO: Cambio de personaje
+            play_sound('character_switch', 0.7)
+            # Cambiar personajes
+            self.active_character, self.inactive_character = self.inactive_character, self.active_character
+            self.active_attack_system, self.inactive_attack_system = self.inactive_attack_system, self.active_attack_system
+            
+            # Reconfigurar IA con parámetros mejorados
+            self.inactive_ai = CharacterAI(self.inactive_character, self.active_character)
+            # Mantener mejoras de IA - IDÉNTICO AL NIVEL 1
+            self.inactive_ai.detection_range = 400
+            self.inactive_ai.attack_range = 150
+            
+            self.switch_cooldown = 60  # Cooldown para evitar spam
+            print(f"🔄 Cambiado a: {self.active_character.name}")
+            
+            # Posicionar nuevo personaje inactivo cerca del activo
+            offset_x = 80
+            self.inactive_character.x = self.active_character.x + offset_x
+            self.inactive_character.y = self.active_character.y
         print(f"🔄 Cambiado a: {self.active_character.name}")
+    
+    def check_static_item_interaction_level2(self):
+        """Verifica si el jugador puede interactuar con items estáticos nivel 2"""
+        player_rect = pygame.Rect(self.active_character.x, self.active_character.y, 64, 64)
+        
+        for item in self.static_items:
+            if item.active and not getattr(item, 'collected', False):
+                item_rect = item.get_rect()
+                if player_rect.colliderect(item_rect):
+                    self.collect_static_item_level2(item, self.active_character)
+                    break
+    
+    def collect_static_item_level2(self, item, character):
+        """Recolecta un item estático nivel 2 - EXACTAMENTE IGUAL QUE NIVEL 1"""
+        # IMPORTANTE: Desactivar el item inmediatamente para que desaparezca
+        item.active = False
+        item.collected = True
+        
+        if item.item_type == 'apple':
+            # SONIDO: Recoger item + menú (igual que nivel 1)
+            play_sound('collect_item', 0.8)
+            play_sound('upgrade_menu', 0.6)
+            self.collect_apple()
+            print(f"🍎 {character.name} recolectó una manzana - Item desactivado")
+        elif item.item_type == 'potion':
+            # SONIDO: Recoger item + escudo (igual que nivel 1)
+            play_sound('collect_item', 0.8)
+            play_sound('shield_activate', 0.7)
+            self.collect_potion(character)
+            print(f"🧪 {character.name} consumió una poción - Item desactivado")
+    
+    def collect_apple(self):
+        """Recolecta manzana y muestra menú de mejoras - EXACTAMENTE IGUAL QUE NIVEL 1"""
+        print("🍎 ¡Manzana recogida! Selecciona mejora:")
+        print("1-Velocidad | 2-Daño | 3-Vida")
+        self.show_upgrade_menu = True
+        self.game_paused = True  # Pausar juego durante selección
+        self.upgrade_menu_timer = 0  # Sin timer automático, esperar selección
     
     def distance_between_characters(self):
         """Calcula la distancia entre los dos personajes"""
@@ -670,13 +1040,6 @@ class Nivel2:
                     self.dropped_items.remove(item)
                     break
     
-    def collect_apple(self):
-        """Recolectar manzana y mostrar menú de mejoras"""
-        print("🍎 ¡Manzana recogida! Selecciona una mejora:")
-        print("1 - Velocidad | 2 - Daño | 3 - Vel. Ataque | 4 - Vida Máxima")
-        self.show_upgrade_menu = True
-        self.upgrade_menu_timer = 300  # 5 segundos a 60 FPS
-    
     def collect_potion(self, character):
         """Recolectar poción y activar escudo"""
         print(f"🧪 ¡{character.name} consumió poción de escudo!")
@@ -689,35 +1052,28 @@ class Nivel2:
         print(f"🛡️ Escudo activado para {character.name} (20 segundos)")
     
     def handle_upgrade_selection(self, key):
-        """Maneja la selección de mejora con manzanas"""
+        """Maneja la selección de mejora - EXACTAMENTE IGUAL QUE NIVEL 1 (3 opciones)"""
         character = self.active_character
         
         if key == pygame.K_1:  # Velocidad
-            character.speed += 0.7
+            character.speed += 0.8
             self.upgrades['speed'] += 1
-            print(f"🚀 Velocidad de {character.name} mejorada: {character.speed:.1f}")
+            print(f"🚀 Velocidad mejorada: {character.speed:.1f}")
             
         elif key == pygame.K_2:  # Daño
-            # Aumentar daño según el sistema de ataque
+            character.damage += 8
             if hasattr(self.active_attack_system, 'melee_damage'):
                 self.active_attack_system.melee_damage += 8
             if hasattr(self.active_attack_system, 'projectile_damage'):
                 self.active_attack_system.projectile_damage += 5
             self.upgrades['damage'] += 1
-            print(f"⚔️ Daño de {character.name} mejorado (nivel {self.upgrades['damage']})")
+            print(f"⚔️ Daño mejorado: +8 de ataque")
             
-        elif key == pygame.K_3:  # Velocidad de ataque
-            if hasattr(self.active_attack_system, 'attack_cooldown'):
-                self.active_attack_system.attack_cooldown = max(200, self.active_attack_system.attack_cooldown - 50)
-            self.upgrades['attack_speed'] += 1
-            print(f"⚡ Velocidad de ataque de {character.name} mejorada (nivel {self.upgrades['attack_speed']})")
-            
-        elif key == pygame.K_4:  # Vida máxima
-            health_boost = 25
-            character.max_health += health_boost
-            character.health = min(character.health + health_boost, character.max_health)
+        elif key == pygame.K_3:  # Vida
+            character.max_health += 25
+            character.health = min(character.health + 25, character.max_health)
             self.upgrades['health'] += 1
-            print(f"❤️ Vida de {character.name} mejorada: {character.health}/{character.max_health}")
+            print(f"❤️ Vida mejorada: {character.health}/{character.max_health}")
     
     def update(self):
         """Actualiza la lógica del juego"""
@@ -764,6 +1120,39 @@ class Nivel2:
             
             self.enforce_boundaries(self.inactive_character)
         
+        # Sistema de ataques automáticos de IA (IGUAL QUE NIVEL 1)
+        if (hasattr(self.inactive_ai, 'current_state') and 
+            self.inactive_ai.current_state == 'attack' and 
+            hasattr(self.inactive_ai, 'current_target') and
+            self.inactive_ai.current_target and
+            hasattr(self.inactive_ai.current_target, 'alive') and
+            self.inactive_ai.current_target.alive):
+            
+            # Verificar que realmente está en rango de ataque
+            target_distance = math.sqrt(
+                (self.inactive_ai.current_target.x - self.inactive_character.x)**2 + 
+                (self.inactive_ai.current_target.y - self.inactive_character.y)**2
+            )
+            
+            if target_distance <= self.inactive_ai.attack_range:
+                # La IA está en rango - activar ataque automático
+                fake_keys_dict = {
+                    pygame.K_SPACE: True,  # Solo activar SPACE
+                    pygame.K_w: False, pygame.K_s: False,
+                    pygame.K_a: False, pygame.K_d: False
+                }
+                
+                class FakeKeys:
+                    def __getitem__(self, key):
+                        return fake_keys_dict.get(key, False)
+                        
+                if self.inactive_character == self.juan:
+                    print("⚔️ Juan IA atacando con animación de GIF")
+                    self.juan_attack.handle_attack_input(FakeKeys(), all_enemies_for_ai)
+                else:
+                    print("🔥 Adán IA atacando con animación de GIF")
+                    self.adan_attack.handle_attack_input(FakeKeys(), all_enemies_for_ai)
+        
         # Actualizar sistema de escudo
         self.update_shield_system()
         
@@ -781,22 +1170,25 @@ class Nivel2:
         # Actualizar gusanos adicionales del nivel 2
         self.worm_spawner.update(players)
         
+        # Aplicar límites del mundo a los gusanos también
+        self.enforce_boundaries_worms()
+        
         # Comprobar impactos de proyectiles del chamán en ambos personajes
         self.chaman.check_projectile_collisions(players)
         
         # Verificar ataques de gusanos contra jugadores
         self.check_worm_attacks(players)
         
-        # Actualizar cámara para seguir la batalla
-        target_camera_x = self.active_character.x - self.screen_width // 2
-        target_camera_y = self.active_character.y - self.screen_height // 2
-        
-        # Suavizar movimiento de cámara
-        self.camera_x += (target_camera_x - self.camera_x) * self.camera_smooth_factor
-        self.camera_y += (target_camera_y - self.camera_y) * self.camera_smooth_factor
-        
-        # Limitar cámara a los bordes del mundo
-        self.limit_camera()
+        # CÁMARA ESTÁTICA - NO SE MUEVE PARA EVITAR MOSTRAR EL VACÍO
+        # target_camera_x = self.active_character.x - self.screen_width // 2
+        # target_camera_y = self.active_character.y - self.screen_height // 2
+        # 
+        # # Suavizar movimiento de cámara
+        # self.camera_x += (target_camera_x - self.camera_x) * self.camera_smooth_factor
+        # self.camera_y += (target_camera_y - self.camera_y) * self.camera_smooth_factor
+        # 
+        # # Limitar cámara a los bordes del mundo
+        # self.limit_camera()
         
         # Actualizar sistemas de ataque contra TODOS los enemigos
         worms = self.worm_spawner.get_worms()
@@ -805,6 +1197,13 @@ class Nivel2:
         self.juan_attack.update(all_enemies)
         self.adan_attack.update(all_enemies)
         
+        # Spawn automático de items distribuidos (igual que nivel 1)
+        self.spawn_random_item_level2()
+        
+        # Actualizar items estáticos existentes
+        for item in self.static_items:
+            item.update()
+        
         # Procesar drops simples: gusano muere -> PNG aparece
         self.process_worm_drops()
         
@@ -812,9 +1211,15 @@ class Nivel2:
         self.update_collectibles()
         
         # Verificar condición de victoria/derrota
-        if self.chaman.health <= 0:
+        if self.chaman.health <= 0 and not self.victory:
             self.victory = True
             print("🎉 ¡VICTORIA ÉPICA! Has derrotado al Chamán Malvado")
+            print("")
+            print("🌟 Y finalmente después de una gran batalla,")
+            print("🌟 María fue rescatada de las garras del mal,")
+            print("🌟 y nuestros héroes vivieron felices")
+            print("🌟 para siempre...")
+            print("")
         
         if self.juan.health <= 0 and self.adan.health <= 0:
             self.game_over = True
@@ -875,7 +1280,14 @@ class Nivel2:
                 if not worm.alive and hasattr(worm, 'pending_drops') and worm.pending_drops:
                     drops = worm.get_and_clear_drops()
                     for drop in drops:
-                        self.item_manager.add_item(drop['type'], drop['x'], drop['y'])
+                        # Añadir item directamente a la lista de drops
+                        self.dropped_items.append({
+                            'type': drop['type'],
+                            'x': drop['x'],
+                            'y': drop['y'],
+                            'collected': False,
+                            'spawn_time': pygame.time.get_ticks()
+                        })
                         print(f"🎁 Drop de gusano invocado: {drop['type']}")
     
     def check_worm_attacks(self, players):
@@ -951,18 +1363,48 @@ class Nivel2:
                 self.dropped_items.remove(item)
     
     def enforce_boundaries(self, character):
-        """Asegura que los personajes no salgan de los límites del mundo"""
-        margin = 50
+        """LÍMITES ESTRICTOS - NO PUEDE SALIR DEL PNG (5940x1080)"""
+        # Límites estrictos basados en las dimensiones REALES del PNG
+        left_limit = 0
+        right_limit = self.world_width - 100  # 5940 - 100 = 5840
+        top_limit = 0
+        bottom_limit = self.world_height - 100  # 1080 - 100 = 980
         
-        if character.x < self.world_boundaries['left'] + margin:
-            character.x = self.world_boundaries['left'] + margin
-        elif character.x > self.world_boundaries['right'] - margin:
-            character.x = self.world_boundaries['right'] - margin
-        
-        if character.y < self.world_boundaries['top'] + margin:
-            character.y = self.world_boundaries['top'] + margin
-        elif character.y > self.world_boundaries['bottom'] - margin:
-            character.y = self.world_boundaries['bottom'] - margin
+        # APLICAR LÍMITES ESTRICTOS - NO PUEDE SALIR DEL MAPA
+        if character.x < left_limit:
+            character.x = left_limit
+            print(f"🚫 {character.name} llegó al límite izquierdo")
+        elif character.x > right_limit:
+            character.x = right_limit
+            print(f"🚫 {character.name} llegó al límite derecho")
+            
+        if character.y < top_limit:
+            character.y = top_limit
+            print(f"🚫 {character.name} llegó al límite superior")
+        elif character.y > bottom_limit:
+            character.y = bottom_limit
+            print(f"🚫 {character.name} llegó al límite inferior")
+    
+    def enforce_boundaries_worms(self):
+        """LÍMITES ESTRICTOS PARA GUSANOS - NO PUEDEN SALIR DEL PNG"""
+        worms = self.worm_spawner.get_worms()
+        for worm in worms:
+            # Límites estrictos para gusanos basados en el PNG real (5940x1080)
+            left_limit = 0
+            right_limit = self.world_width - 64  # 5940 - 64 = 5876
+            top_limit = 0
+            bottom_limit = self.world_height - 64  # 1080 - 64 = 1016
+            
+            # APLICAR LÍMITES ESTRICTOS A GUSANOS
+            if worm.x < left_limit:
+                worm.x = left_limit
+            elif worm.x > right_limit:
+                worm.x = right_limit
+                
+            if worm.y < top_limit:
+                worm.y = top_limit
+            elif worm.y > bottom_limit:
+                worm.y = bottom_limit
     
     def limit_camera(self):
         """Limita la cámara a los bordes del mundo"""
@@ -987,7 +1429,12 @@ class Nivel2:
         self.chaman.x, self.chaman.y = self.screen_width//2, self.screen_height//4
         
         # Limpiar proyectiles y items
-        self.chaman.projectiles = []
+        # Reiniciar proyectiles del chamán si tiene el atributo
+        # (Comentado hasta verificar estructura exacta del chamán)
+        # if hasattr(self.chaman, 'projectiles'):
+        #     self.chaman.projectiles = []
+        # elif hasattr(self.chaman, 'attack_system') and hasattr(self.chaman.attack_system, 'projectiles'):
+        #     self.chaman.attack_system.projectiles = []
         self.dropped_items = []
         
         # Resetear estados
@@ -1033,6 +1480,9 @@ class Nivel2:
         # Dibujar coleccionables simples (gusano muere -> PNG aparece)
         self.draw_collectibles()
         
+        # Dibujar items estáticos distribuidos (igual que nivel 1)
+        self.draw_static_items_level2()
+        
         # Dibujar efectos de ataque
         self.juan_attack.draw(self.screen, self.camera_x, self.camera_y)
         self.adan_attack.draw(self.screen, self.camera_x, self.camera_y)
@@ -1070,6 +1520,13 @@ class Nivel2:
         
         self.screen.blit(shield_surface, 
                         (character.x - self.camera_x - 20, character.y - self.camera_y - 20))
+    
+    def draw_static_items_level2(self):
+        """Dibuja items estáticos distribuidos en el nivel 2"""
+        for item in self.static_items:
+            if item.active and not getattr(item, 'collected', False):
+                item.draw(self.screen, self.camera_x, self.camera_y, 
+                         self.apple_image, self.potion_image)
     
     def draw_collectibles(self):
         """Dibuja manzanas y pociones simples - Gusano muere -> PNG aparece"""
@@ -1126,6 +1583,10 @@ class Nivel2:
         # Mensaje de revival si es necesario
         if self.show_revival_prompt:
             self.draw_revival_prompt()
+        
+        # Mostrar progreso de revival
+        if hasattr(self, 'inactive_ai') and self.inactive_ai and self.inactive_ai.is_being_revived:
+            self.draw_revival_progress()
     
     def draw_floating_health_bars(self):
         """Dibuja barras de vida flotantes mejoradas encima de los personajes"""
@@ -1213,24 +1674,50 @@ class Nivel2:
                     self.screen.blit(shield_surface, shield_rect)
     
     def draw_revival_prompt(self):
-        """Dibuja el mensaje de revival"""
+        """Dibuja prompt para revivir"""
         font = pygame.font.Font(None, 48)
-        prompt_text = f"Presiona E para revivir a {self.inactive_character.name}"
-        prompt_surface = font.render(prompt_text, True, (255, 255, 100))
+        text = f"Presiona E para revivir a {self.inactive_character.name}"
+        revival_text = font.render(text, True, (255, 255, 100))
+        revival_rect = revival_text.get_rect(center=(self.screen_width//2, self.screen_height - 100))
+        
+        # Fondo del texto
+        bg_surface = pygame.Surface((revival_rect.width + 20, revival_rect.height + 10), pygame.SRCALPHA)
+        bg_surface.fill((0, 0, 0, 180))
+        self.screen.blit(bg_surface, (revival_rect.x - 10, revival_rect.y - 5))
+        self.screen.blit(revival_text, revival_rect)
+    
+    def draw_revival_progress(self):
+        """Dibuja barra de progreso de revivir"""
+        if not self.inactive_ai.is_being_revived:
+            return
+        
+        progress = self.inactive_ai.revival_timer / self.inactive_ai.revival_time
+        
+        # Barra de progreso
+        bar_width = 300
+        bar_height = 20
+        x = self.screen_width // 2 - bar_width // 2
+        y = self.screen_height // 2
         
         # Fondo
-        bg_surface = pygame.Surface((prompt_surface.get_width() + 30, prompt_surface.get_height() + 20))
-        bg_surface.set_alpha(200)
-        bg_surface.fill((0, 0, 0))
+        pygame.draw.rect(self.screen, (100, 0, 0), (x, y, bar_width, bar_height))
         
-        prompt_rect = prompt_surface.get_rect(center=(self.screen_width//2, 150))
-        bg_rect = bg_surface.get_rect(center=(self.screen_width//2, 150))
+        # Progreso
+        progress_width = int(bar_width * progress)
+        pygame.draw.rect(self.screen, (0, 255, 100), (x + 2, y + 2, progress_width - 4, bar_height - 4))
         
-        self.screen.blit(bg_surface, bg_rect)
-        self.screen.blit(prompt_surface, prompt_rect)
+        # Borde
+        pygame.draw.rect(self.screen, (255, 255, 255), (x, y, bar_width, bar_height), 2)
+        
+        # Texto
+        font = pygame.font.Font(None, 36)
+        text = f"Reviviendo... {int(progress * 100)}%"
+        revival_text = font.render(text, True, (255, 255, 255))
+        text_rect = revival_text.get_rect(center=(x + bar_width//2, y - 30))
+        self.screen.blit(revival_text, text_rect)
     
     def draw_upgrade_menu(self):
-        """Dibuja el menú de selección de mejoras"""
+        """Dibuja el menú de selección de mejoras - EXACTAMENTE IGUAL QUE NIVEL 1"""
         # Fondo del menú
         menu_width = 600
         menu_height = 400
@@ -1249,7 +1736,7 @@ class Nivel2:
         title_rect = title_text.get_rect(center=(menu_width//2, 50))
         menu_surface.blit(title_text, title_rect)
         
-        # Opciones simplificadas (3 opciones como solicitaste)
+        # Opciones EXACTAMENTE IGUALES al nivel 1 (3 opciones)
         options = [
             "1 - 🚀 Velocidad de Movimiento (+0.8)",
             "2 - ⚔️ Daño de Ataque (+8)",
@@ -1257,8 +1744,8 @@ class Nivel2:
         ]
         
         for i, option in enumerate(options):
-            option_text = font_option.render(option, True, (200, 255, 200))
-            option_rect = option_text.get_rect(center=(menu_width//2, 120 + i * 60))
+            option_text = font_option.render(option, True, (255, 255, 255))
+            option_rect = option_text.get_rect(center=(menu_width//2, 150 + i * 60))
             menu_surface.blit(option_text, option_rect)
         
         # Instrucciones
@@ -1279,35 +1766,19 @@ class Nivel2:
         active_text = font.render(f"🎮 {self.active_character.name}", True, (255, 255, 255))
         self.screen.blit(active_text, (20, 20))
         
-        # Vidas con barras gráficas y estadísticas mejoradas - IDÉNTICO AL NIVEL 1
+        # Vidas SIN estadísticas innecesarias - LIMPIA COMO SOLICITA EL USUARIO
         juan_health_text = font_small.render(f"Juan: {self.juan.health}/{self.juan.max_health}", 
                                        True, (255, 255, 255) if self.juan.health > 0 else (255, 100, 100))
         self.screen.blit(juan_health_text, (20, 90))
-        
-        # Estadísticas adicionales de Juan
-        juan_speed = getattr(self.juan, 'speed', 5)
-        juan_damage = getattr(self.juan, 'base_damage', getattr(self.juan, 'attack_damage', 15))
-        juan_stats = font_small.render(f"⚡{juan_speed:.1f} ⚔️{juan_damage}", True, (200, 200, 200))
-        self.screen.blit(juan_stats, (20, 120))
         
         adan_health_text = font_small.render(f"Adán: {self.adan.health}/{self.adan.max_health}", 
                                        True, (255, 255, 255) if self.adan.health > 0 else (255, 100, 100))
         self.screen.blit(adan_health_text, (300, 90))
         
-        # Estadísticas adicionales de Adán
-        adan_speed = getattr(self.adan, 'speed', 5)
-        adan_damage = getattr(self.adan, 'base_damage', getattr(self.adan, 'attack_damage', 40))
-        adan_stats = font_small.render(f"⚡{adan_speed:.1f} ⚔️{adan_damage}", True, (200, 200, 200))
-        self.screen.blit(adan_stats, (300, 120))
-        
-        # Vida del Chamán - AHORA EN NÚMEROS ABSOLUTOS como Juan y Adán
+        # Vida del Chamán - Solo números de vida
         chaman_health_text = font_small.render(f"👹 Chamán: {self.chaman.health}/{self.chaman.max_health}", 
                                         True, (255, 100, 255) if self.chaman.health > 0 else (255, 100, 100))
         self.screen.blit(chaman_health_text, (600, 90))
-        
-        # Estadísticas del Chamán
-        chaman_stats = font_small.render(f"⚡{self.chaman.speed:.1f} ⚔️{self.chaman.damage}", True, (200, 200, 200))
-        self.screen.blit(chaman_stats, (600, 120))
         
         # Mostrar progreso de gusanos (informativo) - posición ajustada
         living_worms = len([worm for worm in self.worm_spawner.worms if worm.alive])
@@ -1392,38 +1863,67 @@ class Nivel2:
         
         # Mensaje de logro
         subtitle = font_large.render("¡Has derrotado al Chamán Malvado!", True, (200, 255, 200))
-        subtitle_rect = subtitle.get_rect(center=(self.screen_width//2, 360))
+        subtitle_rect = subtitle.get_rect(center=(self.screen_width//2, 320))
         self.screen.blit(subtitle, subtitle_rect)
         
-        # Estadísticas de la batalla
+        # Mensaje final del juego con mejor espaciado
+        y_position = 420  # Posición inicial más abajo
+        
+        final_messages = [
+            "Y finalmente después de una gran batalla,",
+            "",  # Línea vacía para espaciado
+            "María fue rescatada de las garras del mal,",
+            "",  # Línea vacía para espaciado  
+            "y nuestros héroes vivieron felices",
+            "",  # Línea vacía para espaciado
+            "para siempre..."
+        ]
+        
+        for i, message in enumerate(final_messages):
+            if message:  # Solo renderizar si no es línea vacía
+                final_line = font_medium.render(message, True, (255, 255, 255))
+                final_line_rect = final_line.get_rect(center=(self.screen_width//2, y_position + (i * 35)))
+                self.screen.blit(final_line, final_line_rect)
+            else:
+                # Para líneas vacías, solo incrementar el espaciado
+                pass
+        
+        # ESTADÍSTICAS REPOSICIONADAS MÁS ABAJO PARA EVITAR SUPERPOSICIÓN
         stats_title = font_medium.render("📊 Estadísticas de Batalla:", True, (255, 255, 255))
-        stats_title_rect = stats_title.get_rect(center=(self.screen_width//2, 450))
+        stats_title_rect = stats_title.get_rect(center=(self.screen_width//2, 450))  # Movido más abajo
         self.screen.blit(stats_title, stats_title_rect)
         
         stats = [
             f"👤 Héroe activo: {self.active_character.name}",
             f"❤️ Vida restante: {self.active_character.health}/{self.active_character.max_health}",
             f"⚡ Mejoras obtenidas: {sum(self.upgrades.values())}",
-            f"🐛 Gusanos derrotados: {self.worm_spawner.total_spawned}"
+            f"🐛 Gusanos derrotados: {self.worm_spawner.total_spawned}",
+            f"⏱️ Tiempo de batalla: {self.format_time(pygame.time.get_ticks() // 1000)}"
         ]
         
         for i, stat in enumerate(stats):
             stat_surface = font_small.render(stat, True, (255, 255, 200))
-            stat_rect = stat_surface.get_rect(center=(self.screen_width//2, 500 + i * 40))
+            stat_rect = stat_surface.get_rect(center=(self.screen_width//2, 500 + i * 35))  # Mejor espaciado
             self.screen.blit(stat_surface, stat_rect)
         
-        # Opciones mejoradas
+        # OPCIONES REPOSICIONADAS MÁS ABAJO
         restart = font_medium.render("R - Volver a jugar", True, (200, 255, 200))
-        restart_rect = restart.get_rect(center=(self.screen_width//2, 680))
+        restart_rect = restart.get_rect(center=(self.screen_width//2, 720))  # Movido más abajo
         self.screen.blit(restart, restart_rect)
         
         menu = font_medium.render("M - Menú Principal", True, (200, 200, 255))
-        menu_rect = menu.get_rect(center=(self.screen_width//2, 740))
+        menu_rect = menu.get_rect(center=(self.screen_width//2, 780))  # Movido más abajo
         self.screen.blit(menu, menu_rect)
         
         exit_text = font_medium.render("ESC - Salir", True, (255, 200, 200))
-        exit_rect = exit_text.get_rect(center=(self.screen_width//2, 800))
+        exit_rect = exit_text.get_rect(center=(self.screen_width//2, 840))  # Movido más abajo
         self.screen.blit(exit_text, exit_rect)
+    
+    def format_time(self, seconds):
+        """Formatea el tiempo en minutos:segundos"""
+        minutes = seconds // 60
+        seconds = seconds % 60
+        return f"{minutes:02d}:{seconds:02d}"
     
     def draw_pause_menu(self):
         """Dibuja el menú de pausa durante el juego"""
@@ -1450,16 +1950,16 @@ class Nivel2:
         health_rect = health_info.get_rect(center=(self.screen_width//2, 410))
         self.screen.blit(health_info, health_rect)
         
-        # Opciones del menú
-        continue_text = font_medium.render("ESC - Continuar partida", True, (200, 255, 200))
+        # Opciones del menú actualizadas
+        continue_text = font_medium.render("P - Continuar partida", True, (200, 255, 200))
         continue_rect = continue_text.get_rect(center=(self.screen_width//2, 520))
         self.screen.blit(continue_text, continue_rect)
         
-        menu_text = font_medium.render("M - Menú Principal", True, (200, 200, 255))
+        menu_text = font_medium.render("M - Menú Principal", True, (255, 200, 200))
         menu_rect = menu_text.get_rect(center=(self.screen_width//2, 580))
         self.screen.blit(menu_text, menu_rect)
         
-        # Controles recordatorio
+        # Controles recordatorio (sin ataque especial)
         controls_title = font_large.render("🎮 Controles:", True, (255, 255, 200))
         controls_title_rect = controls_title.get_rect(center=(self.screen_width//2, 680))
         self.screen.blit(controls_title, controls_title_rect)
@@ -1467,7 +1967,7 @@ class Nivel2:
         controls = [
             "TAB - Cambiar héroe",
             "ESPACIO - Ataque básico", 
-            "X - Ataque especial"
+            "F1 - Editor de bloques"
         ]
         
         for i, control in enumerate(controls):

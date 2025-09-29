@@ -15,7 +15,7 @@ class CharacterBase:
         # Posición y movimiento
         self.x = x
         self.y = y
-        self.speed = CHARACTER_SPEED
+        self.speed = float(CHARACTER_SPEED)  # Usar float para compatibilidad
         self.current_direction = "down"
         self.moving = False
         
@@ -60,7 +60,9 @@ class CharacterBase:
                 gif = Image.open(file_path)
                 frames = []
                 
-                for frame_num in range(gif.n_frames):
+                # Usar getattr para evitar errores con n_frames
+                frame_count = getattr(gif, 'n_frames', 1)
+                for frame_num in range(frame_count):
                     gif.seek(frame_num)
                     frame = gif.copy().convert("RGBA")
                     
@@ -159,17 +161,18 @@ class CharacterBase:
         screen_x = self.x - camera_x
         screen_y = self.y - camera_y
         
-        # Obtener frame actual con inversión especial para Juan
+        # Obtener frame actual con inversión especial para Juan en direcciones verticales
         if self.name == "Juan":
-            # Invertir direcciones arriba/abajo para Juan
+            # Invertir SOLO las direcciones arriba/abajo para Juan
             direction_map = {
-                "up": "down",    # Arriba usa animación de abajo
-                "down": "up",    # Abajo usa animación de arriba
-                "left": "left",  # Izquierda mantiene (se invierte horizontalmente después)
-                "right": "right" # Derecha mantiene (se invierte horizontalmente después)
+                "up": "down",    # Cuando va arriba, usa animación de abajo
+                "down": "up",    # Cuando va abajo, usa animación de arriba
+                "left": "left",  # Izquierda se mantiene
+                "right": "right" # Derecha se mantiene
             }
             animation_direction = direction_map.get(self.current_direction, self.current_direction)
         else:
+            # Adán usa direcciones normales
             animation_direction = self.current_direction
         
         current_animation = self.animations.get(animation_direction, [])
@@ -182,8 +185,19 @@ class CharacterBase:
             scaled_size = (int(original_size[0] * 1.56), int(original_size[1] * 1.56))
             scaled_frame = pygame.transform.scale(current_frame, scaled_size)
             
-            # Invertir horizontalmente los movimientos de Juan
-            if self.name == "Juan":
+            # CORREGIDO: Solo invertir horizontalmente para Juan usando configuración
+            # Las direcciones up/down ahora funcionan correctamente
+            should_flip = False
+            if self.name == "Juan" and JUAN_FLIP_HORIZONTAL:
+                # Solo invertir horizontalmente si los sprites left/right están mirando al lado contrario
+                if self.current_direction in ["left", "right"]:
+                    should_flip = True
+            elif self.name == "Adán" and ADAN_FLIP_HORIZONTAL:
+                # Adán normalmente no necesita corrección, pero disponible por configuración
+                if self.current_direction in ["left", "right"]:
+                    should_flip = True
+            
+            if should_flip:
                 scaled_frame = pygame.transform.flip(scaled_frame, True, False)
             
             # Efecto de invulnerabilidad

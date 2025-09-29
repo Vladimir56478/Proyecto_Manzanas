@@ -30,6 +30,13 @@ HEALTH_BAR_HEIGHT = 10
 ANIMATION_SPEED = 0.15
 FRAME_DURATION = 100
 
+# === CONFIGURACIÓN DE CORRECCIONES DE SPRITES ===
+# Configuración para corregir sprites que miran al lado contrario
+JUAN_FLIP_HORIZONTAL = True  # Solo invertir horizontalmente left/right
+JUAN_FLIP_VERTICAL = True    # Invertir up/down (arriba usa anim de abajo y viceversa)
+ADAN_FLIP_HORIZONTAL = False # Adán usa animaciones normales
+ADAN_FLIP_VERTICAL = False   # Adán usa animaciones normales
+
 # === CONFIGURACIÓN DE AUDIO ===
 MASTER_VOLUME = 0.7
 MUSIC_VOLUME = 0.5

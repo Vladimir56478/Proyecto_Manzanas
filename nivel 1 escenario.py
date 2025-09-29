@@ -612,33 +612,88 @@ class Game:
         print("✅ Sistema de spawn dinámico configurado para 25 gusanos únicos")
     
     def setup_static_items(self):
-        """Crea items estáticos con spawn paulatino - máximo 10 items"""
-        # Exactamente 10 items total distribuidos estratégicamente
-        item_positions = [
-            # 6 Manzanas (mejoras) - más espaciadas
-            (400, 250, 'apple'),
-            (900, 450, 'apple'),
-            (1300, 650, 'apple'),
-            (600, 750, 'apple'),
-            (1100, 200, 'apple'),
-            (1500, 500, 'apple'),
-            
-            # 4 Pociones (escudos) - posiciones estratégicas
-            (700, 300, 'potion'),
-            (1200, 400, 'potion'),
-            (500, 600, 'potion'),
-            (1400, 750, 'potion'),
+        """Crea items estáticos distribuidos por todo el mapa evitando bloques de colisión - máximo 10 items"""
+        # Configurar spawn temporal de items (hasta 10 total)
+        self.max_items = 10
+        self.items_spawned = 0
+        self.last_item_spawn_time = pygame.time.get_ticks()
+        self.item_spawn_interval = 5000  # 5 segundos entre cada item
+        
+        # Lista de tipos de items con probabilidades
+        self.item_types = [
+            ('apple', 0.6),  # 60% manzanas
+            ('potion', 0.4)  # 40% pociones
         ]
         
+        print(f"✅ Sistema de spawn distribuido configurado - 1 item cada 5 segundos (máximo {self.max_items})")
+        print("📍 Items aparecerán aleatoriamente por todo el mapa evitando bloques de colisión")
+    
+    def spawn_random_item(self):
+        """Crea un item en una posición aleatoria válida del mapa"""
+        if self.items_spawned >= self.max_items:
+            return None
+            
         current_time = pygame.time.get_ticks()
+        if current_time - self.last_item_spawn_time < self.item_spawn_interval:
+            return None
         
-        for i, (x, y, item_type) in enumerate(item_positions):
-            item = StaticItem(x, y, item_type)
-            # Spawn paulatino: cada item aparece con 3 segundos de diferencia
-            item.spawn_delay = current_time + (i * 3000)  # 3 segundos entre cada item
-            self.static_items.append(item)
+        # Intentar encontrar una posición válida (máximo 50 intentos)
+        attempts = 0
+        max_attempts = 50
         
-        print(f"✅ {len(self.static_items)} items configurados para spawn paulatino (cada 3 segundos)")
+        while attempts < max_attempts:
+            # Generar posición aleatoria dentro del mundo (con margen)
+            x = random.randint(100, self.world_width - 100)
+            y = random.randint(100, self.world_height - 100)
+            
+            # Verificar que no esté en un bloque de colisión
+            item_rect = pygame.Rect(x, y, ITEM_SIZE[0], ITEM_SIZE[1])
+            
+            # Revisar colisión con bloques invisibles
+            collision_found = False
+            for block in self.collision_manager.blocks:
+                if item_rect.colliderect(block.rect):
+                    collision_found = True
+                    break
+            
+            # Verificar que no esté muy cerca de otros items existentes
+            too_close = False
+            for existing_item in self.static_items:
+                if existing_item.active:
+                    dist = math.sqrt((x - existing_item.x)**2 + (y - existing_item.y)**2)
+                    if dist < 150:  # Mínimo 150 píxeles de separación
+                        too_close = True
+                        break
+            
+            if not collision_found and not too_close:
+                # Posición válida encontrada
+                # Seleccionar tipo de item basado en probabilidades
+                rand_val = random.random()
+                cumulative_prob = 0
+                selected_type = 'apple'  # Por defecto
+                
+                for item_type, prob in self.item_types:
+                    cumulative_prob += prob
+                    if rand_val <= cumulative_prob:
+                        selected_type = item_type
+                        break
+                
+                # Crear item
+                new_item = StaticItem(x, y, selected_type)
+                new_item.active = True  # Activar inmediatamente
+                new_item.spawn_time = current_time
+                self.static_items.append(new_item)
+                
+                self.items_spawned += 1
+                self.last_item_spawn_time = current_time
+                
+                print(f"✨ Item {selected_type} spawneado en ({x}, {y}) - {self.items_spawned}/{self.max_items}")
+                return new_item
+            
+            attempts += 1
+        
+        print(f"⚠️ No se pudo encontrar posición válida para item después de {max_attempts} intentos")
+        return None
     
 
     def create_collectible_images(self):
@@ -666,7 +721,15 @@ class Game:
             
             image_data = BytesIO(response.content)
             pil_image = Image.open(image_data)
-            pil_image = pil_image.convert('RGBA').resize(ITEM_SIZE, Image.LANCZOS)
+            try:
+                # Intentar usar el método moderno primero
+                if hasattr(Image, 'Resampling'):
+                    pil_image = pil_image.convert('RGBA').resize(ITEM_SIZE, Image.Resampling.LANCZOS)
+                else:
+                    # Fallback para versiones más antiguas
+                    pil_image = pil_image.convert('RGBA').resize(ITEM_SIZE)
+            except AttributeError:
+                pil_image = pil_image.convert('RGBA').resize(ITEM_SIZE)
             
             pygame_surface = pygame.image.fromstring(
                 pil_image.tobytes(), pil_image.size, 'RGBA'
@@ -731,6 +794,18 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return False
+                elif event.key == pygame.K_p:
+                    # Tecla de pausa
+                    self.game_paused = not self.game_paused
+                    if self.game_paused:
+                        print("⏸️ Juego pausado - Presiona P para continuar")
+                    else:
+                        print("▶️ Juego reanudado")
+                elif event.key == pygame.K_m and self.game_paused:
+                    # Ir al menú principal desde pausa
+                    print("🏠 Regresando al menú principal desde pausa...")
+                    self.return_to_main_menu()
+                    return False
                 elif event.key == pygame.K_F1:
                     # Toggle modo editor
                     self.collision_manager.editor_mode = not self.collision_manager.editor_mode
@@ -760,8 +835,9 @@ class Game:
                     return False
                 elif event.key == pygame.K_TAB and not self.collision_manager.editor_mode:
                     self.switch_character()
-                elif event.key == pygame.K_x and not self.collision_manager.editor_mode:
-                    self.perform_special_attack()
+                # ELIMINADO: Ataque especial de bolitas (tecla X)
+                # elif event.key == pygame.K_x and not self.collision_manager.editor_mode:
+                #     self.perform_special_attack()
                 elif self.show_upgrade_menu and event.key in [pygame.K_1, pygame.K_2, pygame.K_3]:
                     self.handle_upgrade_selection(event.key)
                     self.show_upgrade_menu = False
@@ -848,6 +924,12 @@ class Game:
     def switch_character(self):
         """Cambia entre Juan y Adán manteniendo configuración avanzada de IA"""
         if self.switch_cooldown <= 0 and not self.game_over and not self.victory:
+            # NUEVO: Verificar que el personaje inactivo esté vivo antes de cambiar
+            if self.inactive_character.health <= 0:
+                print(f"❌ No puedes cambiar a {self.inactive_character.name} - está muerto")
+                print(f"💊 Revívelo primero con 'E' cuando estés cerca")
+                return
+            
             # SONIDO: Cambio de personaje
             play_sound('character_switch', 0.7)
             # Cambiar personajes
@@ -909,6 +991,10 @@ class Game:
                 self.switch_cooldown -= 1
             return
         
+        # Actualizar solo si el juego no está pausado
+        if self.game_paused:
+            return
+            
         keys_pressed = pygame.key.get_pressed()
         
         # Actualizar personaje activo
@@ -923,12 +1009,59 @@ class Game:
             
             self.enforce_boundaries(self.active_character)
         
-        # Actualizar IA del personaje inactivo
+        # Actualizar IA del personaje inactivo con ATAQUE A GUSANOS
         if (self.inactive_character.health > 0 or self.inactive_ai.is_being_revived) and not self.collision_manager.editor_mode:
             old_x, old_y = self.inactive_character.x, self.inactive_character.y
             
             worms = self.worm_spawner.get_worms()
-            self.inactive_ai.update(worms)
+            
+            # NUEVA FUNCIONALIDAD: Hacer que la IA ataque gusanos cercanos
+            target_worm = None
+            min_distance = float('inf')
+            
+            # Buscar el gusano más cercano
+            for worm in worms:
+                if worm.alive:
+                    distance = math.sqrt((worm.x - self.inactive_character.x)**2 + (worm.y - self.inactive_character.y)**2)
+                    if distance < min_distance:
+                        min_distance = distance
+                        target_worm = worm
+            
+            # Si hay un gusano cerca, atacarlo; si no, seguir al jugador
+            if target_worm and min_distance < 150:  # Rango de detección
+                # La IA ya maneja el targeting internamente
+                self.inactive_ai.update(worms)
+                
+                # Intentar atacar si está cerca
+                if min_distance < 100:  # Rango de ataque
+                    # Determinar dirección de ataque hacia el gusano
+                    dx = target_worm.x - self.inactive_character.x
+                    dy = target_worm.y - self.inactive_character.y
+                    
+                    # Crear teclas virtuales para ataque IA (usando valores por defecto para todas las teclas)
+                    attack_keys = {key: False for key in range(512)}  # Inicializar todas las teclas como False
+                    attack_keys[pygame.K_SPACE] = True
+                    if abs(dx) > abs(dy):
+                        if dx > 0:
+                            attack_keys[pygame.K_d] = True  # Derecha
+                        else:
+                            attack_keys[pygame.K_a] = True  # Izquierda
+                    else:
+                        if dy > 0:
+                            attack_keys[pygame.K_s] = True  # Abajo
+                        else:
+                            attack_keys[pygame.K_w] = True  # Arriba
+                    
+                    # Ejecutar ataque según el personaje (sin from_ai para compatibilidad)
+                    if self.inactive_character.name == "Adan":
+                        if self.adan_attack.handle_attack_input(attack_keys, worms):
+                            print(f"🔥 Adán IA atacando gusano a {min_distance:.1f} unidades")
+                    elif self.inactive_character.name == "Juan":
+                        if self.juan_attack.handle_attack_input(attack_keys, worms):
+                            print(f"🔥 Juan IA atacando gusano a {min_distance:.1f} unidades")
+            else:
+                # Comportamiento normal: seguir al jugador
+                self.inactive_ai.update(worms)
             
             ai_animation_state = self.inactive_ai.get_animation_state()
             self.inactive_character.update(keys_pressed=None, ai_controlled=True, ai_direction=ai_animation_state)
@@ -978,6 +1111,13 @@ class Game:
         # Actualizar sistemas de ataque
         self.juan_attack.update(worms)
         self.adan_attack.update(worms)
+        
+        # Spawn automático de items distribuidos
+        self.spawn_random_item()
+        
+        # Actualizar items existentes
+        for item in self.static_items:
+            item.update()
         
         # Actualizar enemigos con sistema de bloqueo de spawn
         players = [self.juan, self.adan]
@@ -1181,7 +1321,7 @@ class Game:
             print("💀 GAME OVER - Ambos personajes han caído")
     
     def check_victory_condition(self):
-        """Verifica si todos los gusanos han sido spawneados y eliminados"""
+        """Verifica si todos los gusanos han sido spawneados y eliminados, y si el jugador llegó al final"""
         # Verificar si todos los gusanos han sido spawneados
         all_spawned = self.worm_spawner.total_spawned >= self.worm_spawner.max_worms
         
@@ -1191,23 +1331,36 @@ class Game:
         # Actualizar estadística de enemigos derrotados
         self.enemies_defeated = self.worm_spawner.total_spawned - living_worms
         
-        # Solo verificar victoria si ya se ha spawneado al menos 1 gusano
-        if (all_spawned and living_worms == 0 and self.worm_spawner.total_spawned > 0 
-            and not self.victory and not self.game_over):
+        # Verificar si ya se eliminaron todos los gusanos
+        all_worms_defeated = (all_spawned and living_worms == 0 and self.worm_spawner.total_spawned > 0)
+        
+        # Solo verificar victoria si ya se eliminaron todos los gusanos
+        if all_worms_defeated and not self.victory and not self.game_over:
             
-            # SONIDO: Victoria
-            play_sound('victory', 1.0)
+            # Verificar si el personaje activo llegó al final del escenario (lado derecho)
+            end_zone_x = self.world_width - 200  # 200 píxeles del final
+            player_at_end = self.active_character.x >= end_zone_x
             
-            print("🌟 ¡TODOS LOS GUSANOS ELIMINADOS! Transición automática al Nivel 2...")
-            print(f"🏆 Victoria conseguida: {self.worm_spawner.total_spawned}/{self.worm_spawner.max_worms} gusanos spawneados y eliminados")
-            
-            self.victory = True
-            self.transition_to_level_2_flag = True
-            self.victory_message = "¡Nivel completado! Cargando Nivel 2..."
-            
-            # Transición automática inmediata
-            pygame.time.set_timer(pygame.USEREVENT + 1, 3000)  # 3 segundos para ver el mensaje
-            print("⏰ Transición automática en 3 segundos...")
+            if player_at_end:
+                # SONIDO: Victoria
+                play_sound('victory', 1.0)
+                
+                print("🌟 ¡TODOS LOS GUSANOS ELIMINADOS Y FINAL ALCANZADO! Transición automática al Nivel 2...")
+                print(f"🏆 Victoria conseguida: {self.worm_spawner.total_spawned}/{self.worm_spawner.max_worms} gusanos eliminados + final alcanzado")
+                
+                self.victory = True
+                self.transition_to_level_2_flag = True
+                self.victory_message = "¡Nivel completado! Cargando Nivel 2..."
+                
+                # Transición automática inmediata
+                pygame.time.set_timer(pygame.USEREVENT + 1, 3000)  # 3 segundos para ver el mensaje
+                print("⏰ Transición automática en 3 segundos...")
+            else:
+                # Mostrar mensaje guía para ir al final
+                if not hasattr(self, 'end_message_shown'):
+                    print("🎯 ¡Todos los gusanos eliminados! Dirígete al FINAL DEL ESCENARIO (→) para completar el nivel")
+                    self.end_message_shown = True
+                    self.victory_message = "¡Gusanos eliminados! Ve al final del escenario (→)"
     
     def check_player_death(self):
         """Verifica si el jugador principal (activo) ha muerto"""
@@ -1309,12 +1462,74 @@ class Game:
         print("🎯 Elimina todos los gusanos para avanzar al Nivel 2")
     
     def launch_level_2(self):
-        """Lanza el Nivel 2 del juego"""
+        """Lanza el Nivel 2 del juego con transferencia de estadísticas y pantalla de carga"""
         try:
+            from loading_screen import LoadingScreen
+            
             print("🚀 Cargando Nivel 2...")
+            
+            # Crear pantalla de carga
+            loading_screen = LoadingScreen(self.screen)
+            
+            # Lista de assets a cargar
+            assets_to_load = [
+                {'name': 'nivel2', 'description': 'Preparando el mundo...'},
+                {'name': 'characters', 'description': 'Cargando personajes...'},
+                {'name': 'chaman', 'description': 'Inicializando Chamán Malvado...'},
+                {'name': 'attacks', 'description': 'Cargando sistemas de ataque...'},
+                {'name': 'animations', 'description': 'Configurando animaciones...'},
+                {'name': 'audio', 'description': 'Preparando efectos de sonido...'},
+                {'name': 'physics', 'description': 'Estableciendo físicas...'},
+                {'name': 'final', 'description': '¡Casi listo!'}
+            ]
+            
+            loading_screen.start_loading(assets_to_load)
+            
+            # Simular carga con pantalla de progreso
+            for i, asset in enumerate(assets_to_load):
+                # Mostrar pantalla de carga
+                loading_screen.draw()
+                pygame.display.flip()
+                
+                # Simular tiempo de carga
+                pygame.time.wait(400)  # 400ms por asset
+                
+                # Actualizar progreso
+                loading_screen.update_progress(asset['name'], asset['description'])
+                
+                # Manejar eventos para evitar que se cuelgue
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        return
+            
+            # Pantalla final de carga
+            loading_screen.set_custom_message("¡Listo para el combate!")
+            loading_screen.draw()
+            pygame.display.flip()
+            pygame.time.wait(500)
             
             # Determinar personaje seleccionado
             selected_character = 'juan' if self.active_character == self.juan else 'adan'
+            
+            # Preparar estadísticas para transferir al nivel 2
+            level1_stats = {
+                'juan': {
+                    'max_health': self.juan.max_health,
+                    'health': self.juan.health,
+                    'speed': self.juan.speed,
+                    'damage': self.juan.damage
+                },
+                'adan': {
+                    'max_health': self.adan.max_health,
+                    'health': self.adan.health,
+                    'speed': self.adan.speed,
+                    'damage': self.adan.damage
+                }
+            }
+            
+            print(f"📊 Transfiriendo estadísticas del Nivel 1:")
+            print(f"   Juan: {level1_stats['juan']}")
+            print(f"   Adán: {level1_stats['adan']}")
             
             # Cerrar pygame del nivel actual
             pygame.quit()
@@ -1322,8 +1537,8 @@ class Game:
             # Importar y ejecutar Nivel 2
             from nivel_2 import Nivel2
             
-            # Crear e iniciar Nivel 2
-            nivel2 = Nivel2(selected_character)
+            # Crear e iniciar Nivel 2 con estadísticas transferidas
+            nivel2 = Nivel2(selected_character, level1_stats)
             nivel2.run()
             
         except ImportError:
@@ -1369,6 +1584,62 @@ class Game:
     
     # === RENDERIZADO ===
     
+    def draw_character_status_ui(self):
+        """Dibuja la UI de estado de personajes para nivel 1"""
+        # Fondo semitransparente para la UI superior
+        ui_surface = pygame.Surface((450, 120), pygame.SRCALPHA)
+        ui_surface.fill((0, 0, 0, 180))
+        self.screen.blit(ui_surface, (10, 10))
+        
+        # Fuentes
+        font_large = pygame.font.Font(None, 36)
+        font_medium = pygame.font.Font(None, 28)
+        font_small = pygame.font.Font(None, 24)
+        
+        # 🎮 Indicador de personaje ACTIVO
+        active_color = (0, 255, 100)  # Verde brillante
+        active_text = font_large.render(f"🎮 JUGADOR: {self.active_character.name}", True, active_color)
+        self.screen.blit(active_text, (20, 25))
+        
+        # 🤖 Indicador de personaje IA
+        ia_color = (255, 200, 50)  # Amarillo
+        ia_text = font_large.render(f"🤖 IA: {self.inactive_character.name}", True, ia_color)
+        self.screen.blit(ia_text, (20, 55))
+        
+        # ❤️ Vida del jugador activo
+        health_percent = self.active_character.health / self.active_character.max_health
+        if health_percent > 0.6:
+            health_color = (100, 255, 100)
+        elif health_percent > 0.3:
+            health_color = (255, 255, 100)
+        else:
+            health_color = (255, 100, 100)
+            
+        health_text = font_medium.render(f"❤️ Vida: {self.active_character.health}/{self.active_character.max_health}", True, health_color)
+        self.screen.blit(health_text, (20, 85))
+        
+        # 🔄 Instrucción de cambio
+        switch_text = font_small.render("🔄 TAB: Cambiar personaje", True, (180, 180, 180))
+        self.screen.blit(switch_text, (280, 85))
+        
+        # 🎯 Estado de batalla en la esquina superior derecha
+        battle_surface = pygame.Surface((280, 80), pygame.SRCALPHA)
+        battle_surface.fill((0, 50, 0, 150))
+        self.screen.blit(battle_surface, (self.screen_width - 300, 10))
+        
+        # 🐛 Gusanos restantes
+        worms_alive = len([w for w in self.worm_spawner.get_worms() if w.alive])
+        worms_text = font_medium.render(f"🐛 Gusanos: {worms_alive}/25", True, (150, 255, 150))
+        self.screen.blit(worms_text, (self.screen_width - 290, 25))
+        
+        # 🏆 Progreso
+        progress_text = font_small.render(f"🏆 Eliminados: {self.enemies_defeated}", True, (255, 255, 100))
+        self.screen.blit(progress_text, (self.screen_width - 290, 50))
+        
+        # 🎮 Nivel 1 indicator
+        level_text = font_small.render("🌍 NIVEL 1 - CÁMARA DINÁMICA", True, (100, 255, 150))
+        self.screen.blit(level_text, (self.screen_width - 290, 70))
+
     def draw(self):
         """Dibuja todo el juego"""
         # Pantallas de fin - renderizar SOLO estas sin fondo si están activas
@@ -1386,6 +1657,9 @@ class Game:
         # Renderizado normal del juego solo si NO hay Game Over o Victory
         # Limpiar pantalla
         self.screen.fill((50, 100, 50))
+        
+        # Dibujar UI de estado de personajes primero
+        self.draw_character_status_ui()
         
         # Dibujar fondo (escenario principal PNG 1980x1080)
         self.background.draw(self.screen, self.camera_x, self.camera_y, 
@@ -1431,6 +1705,10 @@ class Game:
         
         # Dibujar UI simplificada
         self.draw_ui()
+        
+        # Dibujar indicador de pausa
+        if self.game_paused:
+            self.draw_pause_screen()
         
         # Dibujar modo editor si está activo
         if self.collision_manager.editor_mode:
@@ -1779,7 +2057,7 @@ class Game:
         game_over_rect = game_over_text.get_rect(center=(self.screen_width//2, self.screen_height//2 - 100))
         self.screen.blit(game_over_text, game_over_rect)
         
-        # Instrucciones
+        # Instrucciones con espaciado consistente
         restart_text = font_small.render("R - Reintentar  |  M - Menú Principal", True, (255, 255, 255))
         restart_rect = restart_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 50))
         self.screen.blit(restart_text, restart_rect)
@@ -1788,9 +2066,9 @@ class Game:
         esc_rect = esc_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 100))
         self.screen.blit(esc_text, esc_rect)
         
-        # Estadísticas
+        # Estadísticas con espaciado consistente (50 píxeles como los demás)
         stats_text = font_small.render(f"Gusanos derrotados: {self.enemies_defeated}", True, (200, 200, 200))
-        stats_rect = stats_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 120))
+        stats_rect = stats_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 150))
         self.screen.blit(stats_text, stats_rect)
     
     def draw_victory(self):
@@ -1850,6 +2128,39 @@ class Game:
             restart_text = font_small.render("R - Reiniciar  |  M - Menú Principal", True, (200, 200, 200))
             restart_rect = restart_text.get_rect(center=(self.screen_width//2, self.screen_height//2 + 150))
             self.screen.blit(restart_text, restart_rect)
+    
+    def draw_pause_screen(self):
+        """Dibuja la pantalla de pausa con opciones"""
+        # Fondo semitransparente
+        overlay = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Título de pausa
+        pause_font = pygame.font.Font(None, 96)
+        pause_text = pause_font.render("⏸️ PAUSADO", True, (255, 255, 255))
+        pause_rect = pause_text.get_rect(center=(self.screen_width // 2, self.screen_height // 2 - 100))
+        self.screen.blit(pause_text, pause_rect)
+        
+        # Opciones del menú de pausa
+        option_font = pygame.font.Font(None, 48)
+        options = [
+            "P - Continuar juego",
+            "M - Menú Principal",
+            "ESC - Salir del juego"
+        ]
+        
+        for i, option in enumerate(options):
+            color = (200, 200, 255) if "Continuar" in option else (255, 200, 200)
+            option_text = option_font.render(option, True, color)
+            option_rect = option_text.get_rect(center=(self.screen_width // 2, self.screen_height // 2 - 20 + i * 60))
+            self.screen.blit(option_text, option_rect)
+    
+    def format_time(self, seconds):
+        """Formatea el tiempo en minutos:segundos"""
+        minutes = seconds // 60
+        seconds = seconds % 60
+        return f"{minutes:02d}:{seconds:02d}"
     
     # === BUCLE PRINCIPAL ===
     

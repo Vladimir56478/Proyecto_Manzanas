@@ -13,6 +13,10 @@ class JuanAttack:
         self.combo_count = 0
         self.max_combo = 3
         
+        # Atributos de daño para compatibilidad
+        self.melee_damage = 15
+        self.projectile_damage = 10
+        
         # Variables para animaciones de ataque
         self.is_attacking = False
         self.attack_animation_frame = 0
@@ -46,35 +50,48 @@ class JuanAttack:
                 frames = []
                 
                 # Extraer todos los frames del GIF
-                for frame_num in range(gif.n_frames):
-                    gif.seek(frame_num)
-                    frame = gif.copy().convert("RGBA")
-                    
-                    # Procesar cada pixel para eliminar fondos blancos/grises
-                    pixels = frame.load()
-                    for y in range(frame.height):
-                        for x in range(frame.width):
-                            r, g, b, a = pixels[x, y]
-                            # Eliminar fondos blancos, grises claros y similares
-                            if r > 200 and g > 200 and b > 200:
-                                pixels[x, y] = (r, g, b, 0)  # Hacer transparente
-                            elif abs(r - g) < 30 and abs(r - b) < 30 and abs(g - b) < 30 and r > 180:
-                                pixels[x, y] = (r, g, b, 0)  # Eliminar grises claros
-                    
-                    # Convertir PIL image a superficie de Pygame
-                    frame_data = frame.tobytes()
-                    pygame_surface = pygame.image.fromstring(frame_data, frame.size, "RGBA")
-                    
-                    # Aplicar transparencia adicional y suavizado
-                    pygame_surface = pygame_surface.convert_alpha()
-                    pygame_surface.set_colorkey((255, 255, 255))
-                    
-                    # Escalar 56% más grande (30% + 20% adicional)
-                    original_size = pygame_surface.get_size()
-                    new_size = (int(original_size[0] * 1.56), int(original_size[1] * 1.56))
-                    pygame_surface = pygame.transform.scale(pygame_surface, new_size)
-                    
-                    frames.append(pygame_surface)
+                try:
+                    frame_count = getattr(gif, 'n_frames', 1)  # Usar getattr para evitar error
+                    for frame_num in range(frame_count):
+                        gif.seek(frame_num)
+                        frame = gif.copy().convert("RGBA")
+                        
+                        # Procesar cada pixel para eliminar fondos blancos/grises
+                        pixels = frame.load()
+                        if pixels:  # Verificar que pixels no sea None
+                            for y in range(frame.height):
+                                for x in range(frame.width):
+                                    try:
+                                        r, g, b, a = pixels[x, y]
+                                        # Eliminar fondos blancos, grises claros y similares
+                                        if r > 200 and g > 200 and b > 200:
+                                            pixels[x, y] = (r, g, b, 0)  # Hacer transparente
+                                        elif abs(r - g) < 30 and abs(r - b) < 30 and abs(g - b) < 30 and r > 180:
+                                            pixels[x, y] = (r, g, b, 0)  # Eliminar grises claros
+                                    except (IndexError, TypeError):
+                                        continue  # Ignorar errores de píxeles
+                        
+                        # Convertir PIL image a superficie de Pygame
+                        frame_data = frame.tobytes()
+                        pygame_surface = pygame.image.fromstring(frame_data, frame.size, "RGBA")
+                        
+                        # Aplicar transparencia adicional y suavizado
+                        pygame_surface = pygame_surface.convert_alpha()
+                        pygame_surface.set_colorkey((255, 255, 255))
+                        
+                        # Escalar 56% más grande (30% + 20% adicional)
+                        original_size = pygame_surface.get_size()
+                        new_size = (int(original_size[0] * 1.56), int(original_size[1] * 1.56))
+                        pygame_surface = pygame.transform.scale(pygame_surface, new_size)
+                        
+                        frames.append(pygame_surface)
+                        
+                except (AttributeError, OSError, Exception) as e:
+                    print(f"⚠️ Error procesando frames: {e}")
+                    # Crear frame de respaldo
+                    backup_surface = pygame.Surface((100, 100), pygame.SRCALPHA)
+                    backup_surface.fill((255, 255, 0, 128))  # Amarillo semitransparente
+                    frames.append(backup_surface)
                 
                 self.attack_animations[direction] = frames
                 print(f"✅ Cargada animación de ataque '{direction}': {len(frames)} frames")
@@ -143,8 +160,21 @@ class JuanAttack:
             elif keys_pressed[pygame.K_d]:
                 direction = "left"  # INVERTIDO: era "right"
             else:
-                # Si no hay teclas presionadas, usar dirección actual del personaje
-                direction = getattr(self.character, 'current_direction', 'down')
+                # Si no hay teclas presionadas, usar dirección actual del personaje INVERTIDA
+                current_direction = getattr(self.character, 'current_direction', 'down')
+                # APLICAR MISMAS INVERSIONES que a las teclas para consistencia
+                if current_direction == "up":
+                    direction = "down"    # INVERTIDO: up -> down
+                elif current_direction == "down":
+                    direction = "up"      # INVERTIDO: down -> up  
+                elif current_direction == "left":
+                    direction = "right"   # INVERTIDO: left -> right
+                elif current_direction == "right":
+                    direction = "left"    # INVERTIDO: right -> left
+                else:
+                    direction = "down"    # Fallback por defecto
+                    
+                print(f"🎯 Juan quieto - mirando {current_direction}, atacando hacia {direction} (invertido)")
             
             print(f"🎯 Juan atacando hacia: {direction}")
             
